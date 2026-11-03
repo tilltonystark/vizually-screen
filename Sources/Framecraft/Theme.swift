@@ -52,6 +52,19 @@ enum Ink {
     static let line = Color.oklch(0.89, 0.004)
     static let soft = Color.oklch(0.975, 0.002)
 }
+enum StudioLayout {
+    static let helpWidth:CGFloat=280
+    static let helpPadding:CGFloat=16
+    static let helpGap:CGFloat=6
+    static let helpTarget:CGFloat=28
+    static let helpDelay:Duration = .milliseconds(250)
+}
+enum StudioType {
+    static var sectionTitle:Font { Geist.font(13,.semibold) }
+    static var controlLabel:Font { Geist.font(13,.medium) }
+    static var caption:Font { Geist.font(12) }
+    static var helpIcon:Font { Geist.font(13) }
+}
 enum Geist {
     static func register() {
         for name in ["Geist-Regular", "Geist-Medium", "Geist-SemiBold"] {

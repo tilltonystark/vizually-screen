@@ -38,32 +38,37 @@ struct StudioInspector: View {
         }.buttonStyle(.plain).accessibilityAddTraits(tab == name ? .isSelected : [])
     }
     private func heading(_ text: String, detail: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing:StudioLayout.helpGap) {
             Text(text).font(Geist.font(13, .semibold))
-            if let detail { Text(detail).font(Geist.font(12)).foregroundStyle(Ink.secondary).fixedSize(horizontal: false, vertical: true) }
+            if let detail { InfoHint(title:text,text:detail) }
+            Spacer()
         }
     }
     @ViewBuilder private var canvasControls: some View {
-        heading("Background", detail: "A little space around your story.")
+        HStack {
+            heading("Background", detail: "Optional framing around your video. None uses the entire source without a background.")
+            Button("None") { editor.update { $0.padding=0 } }.buttonStyle(StudioButtonStyle(quiet:true))
+                .accessibilityLabel("No background").accessibilityAddTraits(editor.project?.padding == 0 ? .isSelected:[]).disabled(editor.project == nil)
+        }
         HStack(spacing: 10) {
             ForEach(palettes, id: \.0) { name, light, dark in
-                Button { editor.update { $0.background = name } } label: {
+                Button { editor.update { $0.background = name;if $0.padding == 0 { $0.padding=0.07 } } } label: {
                     RoundedRectangle(cornerRadius: 8).fill(LinearGradient(colors: [light, dark], startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 44, height: 44)
-                        .overlay { if editor.project?.background == name { Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).shadow(color: .black.opacity(0.4), radius: 2) } }
+                        .overlay { if editor.project?.background == name && editor.project?.padding != 0 { Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).shadow(color: .black.opacity(0.4), radius: 2) } }
                         .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(.black.opacity(0.1), lineWidth: 1) }
-                }.buttonStyle(.plain).help(name).accessibilityLabel("\(name) background").accessibilityAddTraits(editor.project?.background == name ? .isSelected : [])
+                }.buttonStyle(.plain).help(name).accessibilityLabel("\(name) background").accessibilityAddTraits(editor.project?.background == name && editor.project?.padding != 0 ? .isSelected : [])
             }
         }.disabled(editor.project == nil)
         if let p = editor.project {
             Text(p.background).font(Geist.font(11)).foregroundStyle(Ink.secondary).padding(.top, -14)
             parameter("Padding", value: Binding(get: { p.padding * 100 }, set: { v in editor.update { $0.padding = v / 100 } }), range: 0...20, suffix: "%", decimals: 0)
         } else {
-            HStack { Text("Padding"); Spacer(); Text("7%").foregroundStyle(Ink.secondary) }.font(Geist.font(12))
-            Slider(value: .constant(7), in: 0...20).disabled(true)
+            HStack { Text("Padding"); Spacer(); Text("0%").foregroundStyle(Ink.secondary) }.font(Geist.font(12))
+            Slider(value: .constant(0), in: 0...20).disabled(true)
         }
         Rule()
-        heading("Trim", detail: "Keep the part that matters.")
+        heading("Trim", detail: "Choose the first and last moments to include. Your original recording stays unchanged.")
         if let p = editor.project {
             VStack(spacing: 12) {
                 trimRow("Start", value: p.trimStart, action: editor.setTrimStart)
@@ -86,11 +91,9 @@ struct StudioInspector: View {
             Rule()
             HStack { Text("Selected zoom").font(Geist.font(13, .semibold)); Spacer(); IconButton(symbol: "trash", title: "Delete selected zoom", action: editor.deleteSelectedZoom) }
             FocusPad(x: zoomBinding(z, \.x), y: zoomBinding(z, \.y), image: editor.thumbnails.first).environmentObject(theme)
-            Text("Drag the focus point").font(Geist.font(11)).foregroundStyle(Ink.secondary).frame(maxWidth: .infinity).padding(.top, -16)
             parameter("Magnification", value: zoomBinding(z, \.scale), range: 1...4, suffix: "×", decimals: 1)
             parameter("Start", value: zoomBinding(z, \.start), range: 0...max(0, editor.duration - z.duration), suffix: "s", decimals: 2)
             parameter("Duration", value: zoomBinding(z, \.duration), range: min(0.1, max(0.001, editor.duration-z.start))...max(0.001, editor.duration-z.start), suffix: "s", decimals: 2)
-            HStack { Image(systemName: "waveform.path"); Text("Smooth entrance and exit") }.font(Geist.font(11)).foregroundStyle(Ink.secondary)
         } else {
             VStack(spacing: 12) {
                 Image(systemName: "cursorarrow.rays").font(.system(size: 25, weight: .light))

@@ -151,20 +151,17 @@ struct RecordingSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack { Text("New recording").font(Geist.font(21, .semibold)); Spacer(); IconButton(symbol: "xmark", title: "Close") { dismiss() } }
-            Text("Choose one window or an entire display.").foregroundStyle(Ink.secondary)
             VStack(alignment:.leading,spacing:12) {
-                HStack { Image(systemName:capture.hasSource ? "checkmark.circle" : "display").foregroundStyle(theme.accent);Text(capture.sourceSummary).font(Geist.font(12,.medium)).fixedSize(horizontal:false,vertical:true) }
-                Button(capture.hasSource ? "Choose another source…" : "Choose screen or window…") { capture.chooseSource() }.buttonStyle(StudioButtonStyle())
-                Text("macOS asks you to choose exactly what to record. Your selection is shared only for this session.").font(Geist.font(11)).foregroundStyle(Ink.secondary).fixedSize(horizontal:false,vertical:true)
+                HStack { Image(systemName:capture.hasSource ? "checkmark.circle" : "display").foregroundStyle(theme.accent);Text(capture.sourceSummary).font(Geist.font(12,.medium)).fixedSize(horizontal:false,vertical:true);Spacer();InfoHint(title:"Recording source",text:"Record a whole screen or choose one app window. Size follows the selected source. If macOS requires it, choose the source in its sharing picker to authorize this session.") }
+                Button(capture.hasSource ? "Change source…" : "Choose source…") { capture.chooseSource() }.buttonStyle(StudioButtonStyle())
             }.frame(maxWidth:.infinity,alignment:.leading).padding(18).background(Ink.soft,in:RoundedRectangle(cornerRadius:10))
-            Picker("Recording quality",selection:$capture.quality) { ForEach(VideoQuality.allCases) { q in Text(q.name).tag(q) } }
-            Text(capture.quality.detail).font(Geist.font(11)).foregroundStyle(Ink.secondary)
-            Toggle("Smooth pointer",isOn:$capture.smoothCursor).toggleStyle(.switch).tint(theme.accent).disabled(!capture.supportsSmoothPointer)
-            Text("Records pointer movement separately and renders a smooth arrow. Turn off to keep the system cursor’s original shapes.").font(Geist.font(11)).foregroundStyle(Ink.secondary)
+            QualityPicker(selection:$capture.quality)
+            HStack { Toggle("Smooth pointer",isOn:$capture.smoothCursor).toggleStyle(.switch).tint(theme.accent).disabled(!capture.supportsSmoothPointer);InfoHint(title:"Smooth pointer",text:"Records movement separately and renders a smooth arrow. Turn off to keep original cursor shapes, such as text selection and resize. Requires macOS 15.2 or later.") }
             Toggle("Include system audio", isOn: $capture.systemAudio).toggleStyle(.switch).tint(theme.accent)
-            Text("Recordings are saved in Movies/Framecraft. Stop from the app or menu bar.").font(Geist.font(12)).foregroundStyle(Ink.secondary)
+            HStack { Text("Saved to Movies/Framecraft").font(Geist.font(12)).foregroundStyle(Ink.secondary);InfoHint(title:"Saved recordings",text:"The original video and its pointer data are saved together in Movies/Framecraft. Stop recording from the app or menu bar.") }
             if let error = capture.error { Text(error).font(Geist.font(12)).foregroundStyle(.red).textSelection(.enabled) }
             HStack { Spacer(); Button("Cancel") { dismiss() }.buttonStyle(StudioButtonStyle()); Button("Start recording") { Task { await capture.start(); if capture.error == nil { dismiss() } } }.buttonStyle(StudioButtonStyle(primary: true)).disabled(!capture.hasSource || capture.busy || capture.picking) }
         }.padding(28).frame(width: 450).foregroundStyle(Ink.primary).background(.white)
+            .task { await capture.prepareDefaultSource() }
     }
 }

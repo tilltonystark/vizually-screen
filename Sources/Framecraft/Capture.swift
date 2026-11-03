@@ -41,6 +41,31 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
         picker.defaultConfiguration=config;picker.maximumStreamCount=1;picker.isActive=true
         picker.present()
     }
+    func prepareDefaultSource() async {
+        // Use an already-authorized sole display without adding another choice.
+        // Never request broad permission merely to skip the system picker.
+        guard !hasSource,!picking,!busy,!recording,NSScreen.screens.count == 1,CGPreflightScreenCaptureAccess() else { return }
+        guard let content=try? await SCShareableContent.excludingDesktopWindows(false,onScreenWindowsOnly:true),
+              content.displays.count == 1,let display=content.displays.first,
+              !hasSource,!picking,!busy,!recording else { return }
+        let selected=SCContentFilter(display:display,excludingApplications:content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier },exceptingWindows:[])
+        applySource(selected)
+    }
+    private func sourceBounds(_ filter:SCContentFilter) -> CGRect {
+        if #available(macOS 15.2,*) {
+            if filter.style == .window { return filter.includedWindows.first?.frame ?? filter.contentRect }
+            return filter.includedDisplays.first?.frame ?? filter.contentRect
+        }
+        return filter.contentRect
+    }
+    private func applySource(_ filter:SCContentFilter) {
+        self.filter=filter;hasSource=true;picking=false;error=nil
+        let size=VideoQuality.nativeSize(points:sourceBounds(filter).size,scale:Double(filter.pointPixelScale))
+        let name:String
+        if #available(macOS 15.2,*),filter.style == .window { name=filter.includedWindows.first?.title ?? "Selected window" }
+        else { name=NSScreen.screens.count == 1 ? "This screen":"Selected screen" }
+        sourceSummary="\(name) · \(size.0) × \(size.1)"
+    }
     func start() async {
         guard !busy,!recording else { return }
         guard let filter else { chooseSource();return }
@@ -48,8 +73,9 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
         let session=UUID();sessionID=session
         do {
             let config=SCStreamConfiguration()
-            let (width,height)=VideoQuality.nativeSize(points:filter.contentRect.size,scale:Double(filter.pointPixelScale))
+            let (width,height)=VideoQuality.nativeSize(points:sourceBounds(filter).size,scale:Double(filter.pointPixelScale))
             config.width=width;config.height=height;config.captureResolution = .best
+            config.scalesToFit=false;config.preservesAspectRatio=true
             config.minimumFrameInterval=CMTime(value:1,timescale:60)
             config.queueDepth=6;config.pixelFormat=quality == .master ? kCVPixelFormatType_32BGRA : kCVPixelFormatType_420YpCbCr8BiPlanarFullRange;config.colorSpaceName=CGColorSpace.sRGB
             if quality != .master { config.colorMatrix=CGDisplayStream.yCbCrMatrix_ITU_R_709_2 }
@@ -58,13 +84,13 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
             let folder=FileManager.default.urls(for:.moviesDirectory,in:.userDomainMask)[0].appendingPathComponent("Framecraft")
             try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
             let url=folder.appendingPathComponent("Recording-\(UUID().uuidString.prefix(8)).\(quality.fileExtension)")
-            let writer=try RecordingWriter(url:url,quality:quality,width:width,height:height,audioEnabled:systemAudio,onBounds: { [weak self] rect in Task { @MainActor in guard let self,self.sessionID == session,rect.width>0,rect.height>0 else { return };self.cursorBounds=rect } }) { [weak self] in Task { @MainActor in guard let self,self.sessionID == session,self.stream != nil else { return };self.beginRecordingClock() } }
+            let writer=RecordingWriter(url:url,quality:quality,audioEnabled:systemAudio,onBounds: { [weak self] rect in Task { @MainActor in guard let self,self.sessionID == session,rect.width>0,rect.height>0 else { return };self.cursorBounds=rect } }) { [weak self] size in Task { @MainActor in guard let self,self.sessionID == session,self.stream != nil else { return };self.sourceSummary="\(filter.style == .window ? "Window":"Screen") · \(Int(size.width)) × \(Int(size.height))";self.beginRecordingClock() } }
             let stream=SCStream(filter:filter,configuration:config,delegate:self)
             try stream.addStreamOutput(writer,type:.screen,sampleHandlerQueue:writer.queue)
             if systemAudio { try stream.addStreamOutput(writer,type:.audio,sampleHandlerQueue:writer.queue) }
             self.output=writer;self.stream=stream;stopping=false
             cursorSamples=[]
-            if #available(macOS 15.2,*) { cursorBounds=filter.includedWindows.first?.frame ?? filter.includedDisplays.first?.frame ?? filter.contentRect } else { cursorBounds=filter.contentRect }
+            cursorBounds=sourceBounds(filter)
             if smoothCursor {
                 cursorTimer=Timer.scheduledTimer(withTimeInterval:1/120,repeats:true) { [weak self] _ in Task { @MainActor in self?.sampleCursor() } }
                 if let cursorTimer { RunLoop.main.add(cursorTimer,forMode:.common) }
@@ -107,11 +133,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     nonisolated func contentSharingPicker(_ picker:SCContentSharingPicker,didCancelFor stream:SCStream?) { Task { @MainActor in self.picking=false } }
     nonisolated func contentSharingPicker(_ picker:SCContentSharingPicker,didUpdateWith filter:SCContentFilter,for stream:SCStream?) {
         Task { @MainActor in
-            self.filter=filter;self.hasSource=true;self.picking=false;self.error=nil
-            let size=VideoQuality.nativeSize(points:filter.contentRect.size,scale:Double(filter.pointPixelScale))
-            let name: String
-            if #available(macOS 15.2,*) { name=filter.includedWindows.first?.title ?? "Selected screen" } else { name="Selected source" }
-            self.sourceSummary="\(name) · \(size.0) × \(size.1) native pixels"
+            self.applySource(filter)
         }
     }
     nonisolated func contentSharingPickerStartDidFailWithError(_ error:Error) { Task { @MainActor in self.picking=false;self.fail(error) } }

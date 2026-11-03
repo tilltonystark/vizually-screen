@@ -119,6 +119,7 @@ final class Editor: ObservableObject {
             if !FileManager.default.fileExists(atPath: url.path) { try await DemoClip.create(at: url) }
             busy = false
             var demo = Project(sourcePath: url.path, trimEnd: 8)
+            demo.padding=0.07
             demo.zooms = [Zoom(start: 1.2, duration: 2.4, scale: 1.65, x: 0.65, y: 0.42), Zoom(start: 4.8, duration: 2.2, scale: 1.9, x: 0.73, y: 0.65)]
             await load(url, saved: demo)
         } catch { busy = false; self.error = error.localizedDescription }

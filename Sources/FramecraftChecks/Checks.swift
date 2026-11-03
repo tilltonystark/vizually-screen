@@ -16,9 +16,10 @@ struct FramecraftChecks {
         try checks.testShortClipAndTrimIntervals()
         try checks.testAppearanceRoundtripAndContrast()
         checks.testMotionAndNativePixels()
+        try await checks.testCaptureContentBounds()
         try await checks.testDemoClip()
         try await checks.testActualVideoExport()
-        print("PASS: continuous camera/cursor motion, native pixel sizing, short-clip/trim bounds, model/theme roundtrips and contrast, demo decode, 60 fps trimmed export with audio, cancellation cleanup")
+        print("PASS: continuous camera/cursor motion, native pixel sizing and padded-frame crop encode/decode, short-clip/trim bounds, model/theme roundtrips and contrast, demo decode, 60 fps trimmed export with audio, cancellation cleanup")
     }
     func testZoomIsContinuousAndReturnsToOriginal() {
         let z = Zoom(start: 2, duration: 3)
@@ -115,6 +116,54 @@ struct FramecraftChecks {
         XCTAssertTrue(abs(smooth[120].x-0.5)<0.001)
         XCTAssertTrue(Motion.cursor(at:1,samples:smooth) != nil)
         XCTAssertTrue(Motion.cursor(at:3,samples:smooth) == nil)
+    }
+    func testCaptureContentBounds() async throws {
+        let geometry=CaptureFrameGeometry(surfaceSize:CGSize(width:640,height:480),contentRectPoints:CGRect(x:20,y:10,width:160,height:100),pixelScale:2,contentScale:1)
+        XCTAssertEqual(geometry.contentRect,CGRect(x:40,y:20,width:320,height:200))
+        XCTAssertEqual(geometry.nativeSize,CGSize(width:320,height:200))
+        let scaled=CaptureFrameGeometry(surfaceSize:CGSize(width:640,height:480),contentRectPoints:CGRect(x:0,y:0,width:160,height:100),pixelScale:2,contentScale:0.5)
+        XCTAssertEqual(scaled.nativeSize,CGSize(width:640,height:400))
+        let full=CaptureFrameGeometry(surfaceSize:CGSize(width:3024,height:1964),contentRectPoints:nil,pixelScale:2,contentScale:1)
+        XCTAssertEqual(full.nativeSize,CGSize(width:3024,height:1964))
+        XCTAssertEqual(Project(sourcePath:"/tmp/source.mp4",trimEnd:1).padding,0)
+        var buffer:CVPixelBuffer?
+        let attrs=[kCVPixelBufferIOSurfacePropertiesKey as String:[:]] as CFDictionary
+        XCTAssertEqual(CVPixelBufferCreate(nil,640,480,kCVPixelFormatType_32BGRA,attrs,&buffer),kCVReturnSuccess)
+        let source=buffer!
+        CVPixelBufferLockBaseAddress(source,[])
+        let data=CVPixelBufferGetBaseAddress(source)!.assumingMemoryBound(to:UInt8.self),stride=CVPixelBufferGetBytesPerRow(source)
+        for y in 0..<480 { for x in 0..<640 {
+            let i=y*stride+x*4,inside=(40..<360).contains(x) && (20..<220).contains(y)
+            data[i]=inside ? 240:0;data[i+1]=inside ? 240:0;data[i+2]=inside ? 240:0;data[i+3]=255
+        } }
+        CVPixelBufferUnlockBaseAddress(source,[])
+        let processor=try CaptureFrameProcessor(size:geometry.nativeSize,pixelFormat:kCVPixelFormatType_32BGRA)
+        let cropped=try processor.process(source,geometry:geometry)
+        XCTAssertEqual(CVPixelBufferGetWidth(cropped),320);XCTAssertEqual(CVPixelBufferGetHeight(cropped),200)
+        CVPixelBufferLockBaseAddress(cropped,[])
+        let bytes=CVPixelBufferGetBaseAddress(cropped)!.assumingMemoryBound(to:UInt8.self),row=CVPixelBufferGetBytesPerRow(cropped)
+        for (x,y) in [(2,2),(317,2),(2,197),(317,197),(160,100)] { XCTAssertTrue(bytes[y*row+x*4+2]>220) }
+        CVPixelBufferUnlockBaseAddress(cropped,[])
+        // Encode/decode the crop; edge checks catch persisted padding, not just math.
+        let url=FileManager.default.temporaryDirectory.appendingPathComponent("crop-check-\(UUID().uuidString).mp4")
+        defer { try? FileManager.default.removeItem(at:url) }
+        let writer=try AVAssetWriter(outputURL:url,fileType:.mp4)
+        let input=AVAssetWriterInput(mediaType:.video,outputSettings:VideoQuality.high.videoSettings(width:320,height:200,fps:60))
+        let adaptor=AVAssetWriterInputPixelBufferAdaptor(assetWriterInput:input,sourcePixelBufferAttributes:nil)
+        writer.add(input);XCTAssertTrue(writer.startWriting());writer.startSession(atSourceTime:.zero)
+        for frame in 0..<12 {
+            while !input.isReadyForMoreMediaData { if writer.status == .failed { throw writer.error! };try await Task.sleep(nanoseconds:1_000_000) }
+            XCTAssertTrue(adaptor.append(cropped,withPresentationTime:CMTime(value:Int64(frame),timescale:60)))
+        }
+        input.markAsFinished();await writer.finishWriting();XCTAssertEqual(writer.status,.completed)
+        let image=try await AVAssetImageGenerator(asset:AVURLAsset(url:url)).image(at:CMTime(value:3,timescale:60)).image
+        XCTAssertEqual(image.width,320);XCTAssertEqual(image.height,200)
+        var rgba=[UInt8](repeating:0,count:320*200*4)
+        rgba.withUnsafeMutableBytes { storage in
+            let context=CGContext(data:storage.baseAddress,width:320,height:200,bitsPerComponent:8,bytesPerRow:1280,space:CGColorSpace(name:CGColorSpace.sRGB)!,bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+            context.draw(image,in:CGRect(x:0,y:0,width:320,height:200))
+        }
+        for (x,y) in [(2,2),(317,2),(2,197),(317,197)] { XCTAssertTrue(rgba[(y*320+x)*4]>210) }
     }
     func testDemoClip() async throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("demo-check-\(UUID().uuidString).mp4")

@@ -4,11 +4,11 @@ import VideoToolbox
 package enum VideoQuality: String, Codable, CaseIterable, Identifiable {
     case high, efficient, master
     package var id: String { rawValue }
-    package var name: String { switch self { case .high: return "High quality"; case .efficient: return "HEVC high quality"; case .master: return "Editing master" } }
+    package var name: String { switch self { case .high: return "Most compatible"; case .efficient: return "High quality"; case .master: return "Maximum detail" } }
     package var codec: AVVideoCodecType { switch self { case .high: return .h264; case .efficient: return .hevc; case .master: return .proRes4444 } }
     package var fileType: AVFileType { self == .master ? .mov : .mp4 }
     package var fileExtension: String { self == .master ? "mov" : "mp4" }
-    package var detail: String { switch self { case .high: return "H.264 · broad compatibility · larger files"; case .efficient: return "HEVC · detailed video at smaller file sizes"; case .master: return "ProRes 4444 · preserves colored text · very large files" } }
+    package var detail: String { switch self { case .high: return "Plays on the widest range of devices and apps. High-quality H.264 video; files are usually larger than High quality."; case .efficient: return "Recommended for everyday recording and sharing. Sharp video with smaller files, using HEVC. Older apps may need Most compatible."; case .master: return "Keeps the most detail in small text and colors, using ProRes 4444. Best for further editing; files are much larger. This is not a lossless format." } }
     package func bitRate(width: Int, height: Int, fps: Double) -> Int {
         // Per-pixel budget scales with resolution and cadence; no hidden resize.
         Int(min(240_000_000, max(8_000_000, Double(width)*Double(height)*min(120,max(1,fps))*(self == .efficient ? 0.18 : 0.30))))

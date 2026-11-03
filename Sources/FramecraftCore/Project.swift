@@ -21,7 +21,7 @@ package struct Project: Codable {
     package var sourcePath: String
     package var trimStart: Double = 0
     package var trimEnd: Double
-    package var padding: Double = 0.07
+    package var padding: Double = 0
     package var background: String = "Lavender"
     package var zooms: [Zoom] = []
     package var cursorSamples: [CursorSample]? = nil
