@@ -8,6 +8,7 @@ struct StudioView: View {
     @EnvironmentObject var theme: StudioTheme
     @Environment(\.openWindow) private var openWindow
     @State private var showRecording = false
+    @State private var showExport = false
     @State private var inspectorTab = "Canvas"
     @State private var dropTargeted = false
     private var locked: Bool { editor.busy || capture.recording || capture.busy }
@@ -31,6 +32,7 @@ struct StudioView: View {
         }
         .background(Color.white)
         .tint(theme.accent)
+        .sheet(isPresented: $showExport) { ExportSheet(editor:editor).environmentObject(theme).font(Geist.font()).preferredColorScheme(.light) }
         .sheet(isPresented: $showRecording) { RecordingSheet(capture: capture).environmentObject(theme).font(Geist.font()).preferredColorScheme(.light) }
         .onChange(of: editor.selectedZoomID) { _, value in if value != nil { inspectorTab = "Zoom" } }
         .alert("Unable to complete action", isPresented: Binding(get: { editor.error != nil || capture.error != nil }, set: { if !$0 { editor.error = nil; capture.error = nil } })) {
@@ -59,7 +61,7 @@ struct StudioView: View {
                 Divider()
                 Button("Appearance Lab…") { openWindow(id: "appearance-lab") }
             } label: { Image(systemName: "ellipsis").frame(width: 24, height: 40) }.menuStyle(.borderlessButton).fixedSize().help("Project actions").disabled(locked)
-            Button(action: editor.export) { HStack(spacing: 8) { Text("Export video"); Image(systemName: "arrow.up.right") } }
+            Button { showExport=true } label: { HStack(spacing: 8) { Text("Export video"); Image(systemName: "arrow.up.right") } }
                 .buttonStyle(StudioButtonStyle(primary: true)).disabled(editor.project == nil || locked)
         }.padding(.leading, 82).padding(.trailing, 20).frame(height: 70)
     }
@@ -127,11 +129,11 @@ struct StudioView: View {
     private var statusBar: some View {
         HStack(spacing: 7) {
             Image(systemName: capture.recording ? "record.circle.fill" : "internaldrive").foregroundStyle(capture.recording ? .red : Ink.secondary)
-            Text(capture.recording ? "Recording display…" : editor.message).lineLimit(1).help(editor.message)
+            Text(capture.recording ? "\(clockText(capture.elapsed)) · \(capture.sourceSummary)" : editor.message).lineLimit(1).help(editor.message)
             Spacer()
             if editor.project != nil { Text("\(editor.project!.zooms.count) zoom regions"); Text("·"); Text("Original preserved") }
             else { Text("On-device editing") }
-        }.font(Geist.font(11)).foregroundStyle(Ink.secondary).padding(.horizontal, 20).frame(height: 30).background(Ink.soft)
+        }.font(Geist.font(11)).monospacedDigit().foregroundStyle(Ink.secondary).padding(.horizontal, 20).frame(height: 30).background(Ink.soft)
     }
 }
 struct NativePlayer: NSViewRepresentable {
@@ -149,22 +151,20 @@ struct RecordingSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack { Text("New recording").font(Geist.font(21, .semibold)); Spacer(); IconButton(symbol: "xmark", title: "Close") { dismiss() } }
-            Text("Choose a display. Framecraft stays out of your recording.").foregroundStyle(Ink.secondary)
-            if capture.displays.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "display").font(.system(size: 32, weight: .light)).foregroundStyle(Ink.secondary)
-                    Text("Allow screen access to see your displays.").font(Geist.font(13))
-                    Button("Find displays") { Task { await capture.refresh() } }.buttonStyle(StudioButtonStyle())
-                }.frame(maxWidth: .infinity).padding(24).background(Ink.soft, in: RoundedRectangle(cornerRadius: 10))
-            } else {
-                Picker("Display", selection: $capture.selectedDisplay) {
-                    ForEach(capture.displays, id: \.displayID) { d in Text("Display \(d.displayID) · \(d.width) × \(d.height)").tag(d.displayID) }
-                }
-            }
+            Text("Choose one window or an entire display.").foregroundStyle(Ink.secondary)
+            VStack(alignment:.leading,spacing:12) {
+                HStack { Image(systemName:capture.hasSource ? "checkmark.circle" : "display").foregroundStyle(theme.accent);Text(capture.sourceSummary).font(Geist.font(12,.medium)).fixedSize(horizontal:false,vertical:true) }
+                Button(capture.hasSource ? "Choose another source…" : "Choose screen or window…") { capture.chooseSource() }.buttonStyle(StudioButtonStyle())
+                Text("macOS asks you to choose exactly what to record. Your selection is shared only for this session.").font(Geist.font(11)).foregroundStyle(Ink.secondary).fixedSize(horizontal:false,vertical:true)
+            }.frame(maxWidth:.infinity,alignment:.leading).padding(18).background(Ink.soft,in:RoundedRectangle(cornerRadius:10))
+            Picker("Recording quality",selection:$capture.quality) { ForEach(VideoQuality.allCases) { q in Text(q.name).tag(q) } }
+            Text(capture.quality.detail).font(Geist.font(11)).foregroundStyle(Ink.secondary)
+            Toggle("Smooth pointer",isOn:$capture.smoothCursor).toggleStyle(.switch).tint(theme.accent).disabled(!capture.supportsSmoothPointer)
+            Text("Records pointer movement separately and renders a smooth arrow. Turn off to keep the system cursor’s original shapes.").font(Geist.font(11)).foregroundStyle(Ink.secondary)
             Toggle("Include system audio", isOn: $capture.systemAudio).toggleStyle(.switch).tint(theme.accent)
             Text("Recordings are saved in Movies/Framecraft. Stop from the app or menu bar.").font(Geist.font(12)).foregroundStyle(Ink.secondary)
             if let error = capture.error { Text(error).font(Geist.font(12)).foregroundStyle(.red).textSelection(.enabled) }
-            HStack { Spacer(); Button("Cancel") { dismiss() }.buttonStyle(StudioButtonStyle()); Button("Start recording") { Task { await capture.start(); if capture.error == nil { dismiss() } } }.buttonStyle(StudioButtonStyle(primary: true)).disabled(capture.displays.isEmpty || capture.busy) }
+            HStack { Spacer(); Button("Cancel") { dismiss() }.buttonStyle(StudioButtonStyle()); Button("Start recording") { Task { await capture.start(); if capture.error == nil { dismiss() } } }.buttonStyle(StudioButtonStyle(primary: true)).disabled(!capture.hasSource || capture.busy || capture.picking) }
         }.padding(28).frame(width: 450).foregroundStyle(Ink.primary).background(.white)
     }
 }

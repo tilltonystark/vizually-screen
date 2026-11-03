@@ -74,7 +74,7 @@ struct StudioInspector: View {
         Rule()
         heading("Output")
         VStack(spacing: 12) {
-            detailRow("Format", "MP4")
+            detailRow("Format", "MP4 / MOV")
             detailRow("Resolution", editor.project == nil ? "Matches source" : "\(Int(editor.videoSize.width)) × \(Int(editor.videoSize.height))")
             detailRow("Audio", "From source")
         }

@@ -18,7 +18,7 @@ struct FramecraftApp: App {
                 .onAppear {
                     NSApp.setActivationPolicy(.regular)
                     NSApp.activate(ignoringOtherApps: true)
-                    capture.onFinish = { url in Task { await editor.load(url) } }
+                    capture.onFinish = { result in Task { await editor.loadRecording(result) } }
                 }
         }
         .windowStyle(.hiddenTitleBar)

@@ -9,12 +9,12 @@ package enum DemoClip {
         defer { try? FileManager.default.removeItem(at: temporary) }
         let writer = try AVAssetWriter(outputURL: temporary, fileType: .mp4)
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
-            AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 1280, AVVideoHeightKey: 720,
-            AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: 3_000_000]
+            AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 2560, AVVideoHeightKey: 1440,
+            AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: 40_000_000]
         ])
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-            kCVPixelBufferWidthKey as String: 1280, kCVPixelBufferHeightKey as String: 720,
+            kCVPixelBufferWidthKey as String: 2560, kCVPixelBufferHeightKey as String: 1440,
             kCVPixelBufferCGImageCompatibilityKey as String: true,
             kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
         ])
@@ -23,7 +23,7 @@ package enum DemoClip {
         guard writer.startWriting() else { throw writer.error ?? CocoaError(.fileWriteUnknown) }
         writer.startSession(atSourceTime: .zero)
         do {
-            for frame in 0..<240 {
+            for frame in 0..<480 {
                 try Task.checkCancellation()
                 while !input.isReadyForMoreMediaData {
                     guard writer.status == .writing else { throw writer.error ?? CocoaError(.fileWriteUnknown) }
@@ -33,15 +33,16 @@ package enum DemoClip {
                 var storage: CVPixelBuffer?
                 guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &storage) == kCVReturnSuccess, let buffer = storage else { throw CocoaError(.fileWriteUnknown) }
                 CVPixelBufferLockBaseAddress(buffer, [])
-                guard let context = CGContext(data: CVPixelBufferGetBaseAddress(buffer), width: 1280, height: 720, bitsPerComponent: 8,
+                guard let context = CGContext(data: CVPixelBufferGetBaseAddress(buffer), width: 2560, height: 1440, bitsPerComponent: 8,
                                               bytesPerRow: CVPixelBufferGetBytesPerRow(buffer), space: CGColorSpaceCreateDeviceRGB(),
                                               bitmapInfo: CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue) else {
                     CVPixelBufferUnlockBaseAddress(buffer, [])
                     throw CocoaError(.fileWriteUnknown)
                 }
-                draw(context, time: Double(frame) / 30)
+                context.scaleBy(x:2,y:2)
+                draw(context, time: Double(frame) / 60)
                 CVPixelBufferUnlockBaseAddress(buffer, [])
-                guard adaptor.append(buffer, withPresentationTime: CMTime(value: Int64(frame), timescale: 30)) else { throw writer.error ?? CocoaError(.fileWriteUnknown) }
+                guard adaptor.append(buffer, withPresentationTime: CMTime(value: Int64(frame), timescale: 60)) else { throw writer.error ?? CocoaError(.fileWriteUnknown) }
             }
             input.markAsFinished()
             await writer.finishWriting()

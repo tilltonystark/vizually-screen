@@ -11,6 +11,9 @@ final class Editor: ObservableObject {
     @Published var busy = false
     @Published var message = "Ready when you are."
     @Published var error: String?
+    @Published var exportProgress: Double=0
+    @Published var isExporting=false
+    private var exportControl: ExportControl?
     @Published var selectedZoomID: UUID?
     @Published var isPlaying = false
     @Published var thumbnails: [NSImage] = []
@@ -18,6 +21,8 @@ final class Editor: ObservableObject {
     @Published var sourceFrameRate: Float = 0
     let player = AVPlayer()
     private var asset: AVURLAsset?
+    private var renderState: RenderState?
+    private var pendingSeek: Double?
     private var observer: Any?
     private var playbackObservation: NSKeyValueObservation?
     private var loadGeneration = UUID()
@@ -25,7 +30,7 @@ final class Editor: ObservableObject {
     private var seeking = false
 
     init() {
-        observer = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.05, preferredTimescale: 600), queue: .main) { [weak self] time in
+        observer = player.addPeriodicTimeObserver(forInterval: CMTime(value:1,timescale:60), queue: .main) { [weak self] time in
             Task { @MainActor in
                 guard let self else { return }
                 guard !self.seeking, self.project != nil else { return }
@@ -51,7 +56,11 @@ final class Editor: ObservableObject {
             let duration = try await asset.load(.duration).seconds
             let tracks = try await asset.loadTracks(withMediaType: .video)
             guard let video = tracks.first, duration.isFinite, duration > 0 else { throw CocoaError(.fileReadCorruptFile) }
-            let project = saved ?? Project(sourcePath: url.path, trimEnd: duration)
+            let sidecar=url.deletingPathExtension().appendingPathExtension("framecraft.json")
+            var project = saved ?? Project(sourcePath:url.path,trimEnd:duration)
+            if saved == nil, FileManager.default.fileExists(atPath:sidecar.path) {
+                project=try JSONDecoder().decode(Project.self,from:Data(contentsOf:sidecar));project.sourcePath=url.path
+            }
             try project.validate(duration: duration)
             let naturalSize = try await video.load(.naturalSize)
             let transform = try await video.load(.preferredTransform)
@@ -73,7 +82,9 @@ final class Editor: ObservableObject {
             }
             guard generation == loadGeneration else { return }
             let item = AVPlayerItem(asset: asset)
-            item.videoComposition = Renderer.composition(asset: asset, project: project)
+            let state=RenderState(project)
+            item.videoComposition = Renderer.composition(asset:asset,project:project,state:state)
+            renderState=state
             player.pause()
             // Commit only after validation and staging; failed loads preserve the current edit.
             self.asset = asset; self.duration = duration; self.project = project
@@ -82,14 +93,26 @@ final class Editor: ObservableObject {
             self.thumbnails = images
             self.selectedZoomID = project.zooms.first?.id
             self.isPlaying = false
+            seekGeneration=UUID();seeking=false;pendingSeek=nil
             player.replaceCurrentItem(with: item)
             seek(project.trimStart)
             message = url.lastPathComponent
         } catch { self.error = error.localizedDescription; message = previousMessage }
     }
+    func loadRecording(_ result: CaptureResult) async {
+        let asset = AVURLAsset(url:result.url)
+        do {
+            var p=Project(sourcePath:result.url.path,trimEnd:try await asset.load(.duration).seconds)
+            p.cursorSamples=result.samples
+            let encoder=JSONEncoder();encoder.outputFormatting=[.prettyPrinted,.sortedKeys]
+            try encoder.encode(p).write(to:result.url.deletingPathExtension().appendingPathExtension("framecraft.json"),options:.atomic)
+            await load(result.url,saved:p)
+            message="Recording saved · \(result.dropped) dropped frames"
+        } catch { self.error=error.localizedDescription }
+    }
     func loadDemo() async {
         guard !busy else { return }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Framecraft-studio-demo-v1.mp4")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Framecraft-studio-demo-v2.mp4")
         busy = true
         message = "Preparing demo…"
         do {
@@ -122,28 +145,26 @@ final class Editor: ObservableObject {
         }
     }
     func update(_ change: (inout Project) -> Void) {
-        guard !busy, var p = project, let asset else { return }
+        guard !busy, var p = project, asset != nil else { return }
         change(&p)
         do { try p.validate(duration: duration) }
         catch { self.error = error.localizedDescription; return }
         project = p
         if let selectedZoomID, !p.zooms.contains(where: { $0.id == selectedZoomID }) { self.selectedZoomID = nil }
-        player.currentItem?.videoComposition = Renderer.composition(asset: asset, project: p)
+        renderState?.update(p)
         // Re-seek to render changes while paused.
         seek(playhead)
     }
     func seek(_ seconds: Double) {
-        guard project != nil, seconds.isFinite else { return }
-        let target = max(0, min(duration, seconds))
-        let generation = UUID()
-        seekGeneration = generation
-        seeking = true
-        playhead = target
-        player.currentItem?.cancelPendingSeeks()
-        player.seek(to: CMTime(seconds: target, preferredTimescale: 60_000), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+        guard project != nil,seconds.isFinite else { return }
+        let target=max(0,min(duration,seconds));playhead=target
+        if seeking { pendingSeek=target;return }
+        seeking=true
+        let generation=seekGeneration
+        player.seek(to:CMTime(seconds:target,preferredTimescale:60_000),toleranceBefore:CMTime(value:1,timescale:120),toleranceAfter:CMTime(value:1,timescale:120)) { [weak self] _ in
             Task { @MainActor in
-                guard let self, generation == self.seekGeneration else { return }
-                self.seeking = false
+                guard let self,self.seekGeneration == generation else { return };self.seeking=false
+                if let pending=self.pendingSeek { self.pendingSeek=nil;self.seek(pending) }
             }
         }
     }
@@ -175,24 +196,27 @@ final class Editor: ObservableObject {
         update { $0.setTrimEnd(value, duration: duration) }
         if let p = project, playhead > p.trimEnd || playhead < p.trimStart { seek(p.trimStart) }
     }
-    func export() {
+    func cancelExport() { exportControl?.cancel();message="Cancelling export…" }
+    func export(quality: VideoQuality = .high) {
         guard let project, let asset else { return }
-        let panel = NSSavePanel(); panel.allowedContentTypes = [.mpeg4Movie]; panel.nameFieldStringValue = "Framecraft-export.mp4"
+        let panel = NSSavePanel(); panel.allowedContentTypes = quality == .master ? [.quickTimeMovie] : [.mpeg4Movie]; panel.nameFieldStringValue = "Framecraft-export.\(quality.fileExtension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard url.standardizedFileURL.path != URL(fileURLWithPath: project.sourcePath).standardizedFileURL.path else { error = "Choose a different filename to preserve your original recording."; return }
-        busy = true; player.pause(); message = "Rendering your video…"
+        busy = true; isExporting=true;exportProgress=0;let control=ExportControl();exportControl=control;player.pause(); message = "Rendering your video…"
         Task {
             // Export to a sibling temporary file before replacing an existing destination.
-            let temp = url.deletingLastPathComponent().appendingPathComponent(".framecraft-\(UUID().uuidString).mp4")
-            defer { busy = false; try? FileManager.default.removeItem(at: temp) }
+            let temp = url.deletingLastPathComponent().appendingPathComponent(".framecraft-\(UUID().uuidString).\(quality.fileExtension)")
+            defer { busy = false;isExporting=false;exportControl=nil;try? FileManager.default.removeItem(at: temp) }
             do {
                 try project.validate(duration: duration)
-                try await Renderer.export(asset: asset, project: project, to: temp)
+                try await MediaExporter.export(asset:asset,project:project,quality:quality,to:temp,control:control) { [weak self] value in
+                    Task { @MainActor in guard let self,self.exportControl === control else { return };self.exportProgress=max(self.exportProgress,value) }
+                }
                 if FileManager.default.fileExists(atPath: url.path) { _ = try FileManager.default.replaceItemAt(url, withItemAt: temp) }
                 else { try FileManager.default.moveItem(at: temp, to: url) }
                 message = "Export complete · \(url.lastPathComponent)"
                 NSWorkspace.shared.activateFileViewerSelecting([url])
-            } catch { self.error = error.localizedDescription; message = "Export failed" }
+            } catch is CancellationError { message="Export cancelled. Original preserved." } catch { self.error = error.localizedDescription; message = "Export failed" }
         }
     }
 }

@@ -15,9 +15,10 @@ struct FramecraftChecks {
         try checks.testProjectRoundtripAndValidation()
         try checks.testShortClipAndTrimIntervals()
         try checks.testAppearanceRoundtripAndContrast()
+        checks.testMotionAndNativePixels()
         try await checks.testDemoClip()
         try await checks.testActualVideoExport()
-        print("PASS: zoom curves, short-clip/trim bounds, project and appearance roundtrips, supported-palette contrast, synthetic demo decode, and actual trimmed MP4 export/decode")
+        print("PASS: continuous camera/cursor motion, native pixel sizing, short-clip/trim bounds, model/theme roundtrips and contrast, demo decode, 60 fps trimmed export with audio, cancellation cleanup")
     }
     func testZoomIsContinuousAndReturnsToOriginal() {
         let z = Zoom(start: 2, duration: 3)
@@ -35,7 +36,7 @@ struct FramecraftChecks {
         p.zooms = [Zoom(start: 1), Zoom(start: 2, scale: 3)]
         let copy = try JSONDecoder().decode(Project.self, from: JSONEncoder().encode(p))
         XCTAssertEqual(copy.zooms, p.zooms)
-        XCTAssertEqual(copy.zoom(at: 3).scale, 3)
+        XCTAssertEqual(copy.zoom(at:3).scale,3)
         XCTAssertEqual(copy.zoom(at: 7).scale, 1)
         try copy.validate(duration: 8)
         p.trimStart = 9
@@ -97,16 +98,36 @@ struct FramecraftChecks {
             }
         }
     }
+    func testMotionAndNativePixels() {
+        let size=VideoQuality.nativeSize(points:CGSize(width:2560,height:1440),scale:2)
+        XCTAssertEqual(size.0,5120);XCTAssertEqual(size.1,2880)
+        XCTAssertEqual(Motion.ease(0.5),0.5,accuracy:0.000001)
+        var p=Project(sourcePath:"/tmp/test.mp4",trimEnd:8)
+        p.zooms=[Zoom(start:1,duration:4,scale:2,x:0.2),Zoom(start:2,duration:4,scale:3,x:0.8)]
+        for time in stride(from:1.0,through:6,by:0.01) {
+            let a=p.zoom(at:time),b=p.zoom(at:time+0.00001)
+            XCTAssertTrue(abs(a.scale-b.scale)<0.001)
+            // Compare camera transforms, which are meaningful even at identity.
+            XCTAssertTrue(abs((a.scale-1)*a.x-(b.scale-1)*b.x)<0.001)
+        }
+        let raw=(0..<240).map { i in CursorSample(time:Double(i)/120,x:0.5+(i%2==0 ? 0.01 : -0.01),y:0.4) }
+        let smooth=Motion.smooth(raw)
+        XCTAssertTrue(abs(smooth[120].x-0.5)<0.001)
+        XCTAssertTrue(Motion.cursor(at:1,samples:smooth) != nil)
+        XCTAssertTrue(Motion.cursor(at:3,samples:smooth) == nil)
+    }
     func testDemoClip() async throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("demo-check-\(UUID().uuidString).mp4")
         defer { try? FileManager.default.removeItem(at: url) }
         try await DemoClip.create(at: url)
         let asset = AVURLAsset(url: url)
         XCTAssertEqual(try await asset.load(.duration).seconds, 8, accuracy: 0.04)
+        let demoTrack=try await asset.loadTracks(withMediaType:.video)[0]
+        XCTAssertEqual(Double(try await demoTrack.load(.nominalFrameRate)),60,accuracy:0.1)
         let generator = AVAssetImageGenerator(asset: asset)
         let first = try await generator.image(at: CMTime(seconds: 0.2, preferredTimescale: 600)).image
         let last = try await generator.image(at: CMTime(seconds: 7, preferredTimescale: 600)).image
-        XCTAssertEqual(first.width, 1280); XCTAssertEqual(first.height, 720)
+        XCTAssertEqual(first.width, 2560); XCTAssertEqual(first.height, 1440)
         XCTAssertTrue((first.dataProvider!.data! as Data) != (last.dataProvider!.data! as Data))
     }
     func testActualVideoExport() async throws {
@@ -139,13 +160,35 @@ struct FramecraftChecks {
         input.markAsFinished()
         await writer.finishWriting()
         XCTAssertEqual(writer.status, .completed)
-        let asset = AVURLAsset(url: inputURL)
+        let videoAsset = AVURLAsset(url: inputURL)
+        let audioURL=dir.appendingPathComponent("tone.caf")
+        let format=AVAudioFormat(standardFormatWithSampleRate:48_000,channels:2)!
+        var audioSettings=format.settings;audioSettings[AVLinearPCMIsNonInterleaved]=false
+        let file=try AVAudioFile(forWriting:audioURL,settings:audioSettings)
+        let buffer=AVAudioPCMBuffer(pcmFormat:format,frameCapacity:96_000)!
+        buffer.frameLength=96_000
+        for i in 0..<96_000 { let value=Float(sin(Double(i)*2*Double.pi*440/48_000)*0.1);buffer.floatChannelData![0][i]=value;buffer.floatChannelData![1][i]=value }
+        try file.write(from:buffer)
+        let audioAsset=AVURLAsset(url:audioURL)
+        let asset=AVMutableComposition()
+        let videoTrack=try await videoAsset.loadTracks(withMediaType:.video)[0]
+        let audioTrack=try await audioAsset.loadTracks(withMediaType:.audio)[0]
+        try asset.addMutableTrack(withMediaType:.video,preferredTrackID:kCMPersistentTrackID_Invalid)!.insertTimeRange(CMTimeRange(start:.zero,duration:CMTime(seconds:2,preferredTimescale:600)),of:videoTrack,at:.zero)
+        try asset.addMutableTrack(withMediaType:.audio,preferredTrackID:kCMPersistentTrackID_Invalid)!.insertTimeRange(CMTimeRange(start:.zero,duration:CMTime(seconds:2,preferredTimescale:600)),of:audioTrack,at:.zero)
         var p = Project(sourcePath: inputURL.path, trimStart: 0.25, trimEnd: 1.75)
         p.zooms = [Zoom(start: 0.3, duration: 1.2, scale: 2, x: 0.8, y: 0.2)]
         try await Renderer.export(asset: asset, project: p, to: outputURL)
         let rendered = AVURLAsset(url: outputURL)
         let duration = try await rendered.load(.duration).seconds
-        XCTAssertEqual(duration, 1.5, accuracy: 0.08)
+        XCTAssertEqual(duration, 1.5, accuracy: 0.04)
+        let audioTracks=try await rendered.loadTracks(withMediaType:.audio)
+        XCTAssertEqual(audioTracks.count,1)
+        let fps=try await rendered.loadTracks(withMediaType:.video)[0].load(.nominalFrameRate)
+        XCTAssertEqual(Double(fps),60,accuracy:0.1)
+        let control=ExportControl();control.cancel()
+        let cancelledURL=dir.appendingPathComponent("cancelled.mp4")
+        do { try await MediaExporter.export(asset:asset,project:p,quality:.high,to:cancelledURL,control:control);fatalError("Cancellation was ignored") }
+        catch is CancellationError { XCTAssertTrue(!FileManager.default.fileExists(atPath:cancelledURL.path)) }
         let generator = AVAssetImageGenerator(asset: rendered)
         let image = try await generator.image(at: CMTime(seconds: 0.5, preferredTimescale: 600)).image
         XCTAssertEqual(image.width, 320)

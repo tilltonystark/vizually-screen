@@ -1,0 +1,67 @@
+{
+  "date" : "2026-11-03",
+  "reference" : "ProRes 4444, 60fps, two seconds; decoded source is reference",
+  "results" : [
+    {
+      "actualBitrateMbps" : 2.7186880000000002,
+      "codec" : "avc1",
+      "duration" : 2,
+      "firstPTS" : 0.033333333333333333,
+      "fps" : 60,
+      "frames" : 120,
+      "height" : 1080,
+      "lastPTS" : 2.0166666666666666,
+      "maxFrameGapMs" : 16.666666666666828,
+      "profile" : "legacy-preset",
+      "rgbPSNR" : 37.06559985993038,
+      "textROI_PSNR" : 32.050277554151101,
+      "width" : 1920
+    },
+    {
+      "actualBitrateMbps" : 1.6164799999999999,
+      "codec" : "avc1",
+      "duration" : 2,
+      "firstPTS" : 0,
+      "fps" : 60,
+      "frames" : 120,
+      "height" : 1080,
+      "lastPTS" : 1.9833333333333334,
+      "maxFrameGapMs" : 16.666666666666828,
+      "profile" : "high",
+      "rgbPSNR" : 37.344308269042401,
+      "textROI_PSNR" : 32.173825257949929,
+      "width" : 1920
+    },
+    {
+      "actualBitrateMbps" : 1.9719,
+      "codec" : "hvc1",
+      "duration" : 2,
+      "firstPTS" : 0,
+      "fps" : 60,
+      "frames" : 120,
+      "height" : 1080,
+      "lastPTS" : 1.9833333333333334,
+      "maxFrameGapMs" : 16.666666666666828,
+      "profile" : "efficient",
+      "rgbPSNR" : 37.451069162110578,
+      "textROI_PSNR" : 32.205068704256242,
+      "width" : 1920
+    },
+    {
+      "actualBitrateMbps" : 330.06521600000002,
+      "codec" : "ap4h",
+      "duration" : 2,
+      "firstPTS" : 0,
+      "fps" : 60,
+      "frames" : 120,
+      "height" : 1080,
+      "lastPTS" : 1.9833333333333334,
+      "maxFrameGapMs" : 16.666666666666828,
+      "profile" : "master",
+      "rgbPSNR" : 42.524493447234349,
+      "textROI_PSNR" : 42.45608138652878,
+      "width" : 1920
+    }
+  ],
+  "scope" : "Synthetic SDR 1920x1080 screen-detail encode\/decode; not live capture or competitor comparison"
+}

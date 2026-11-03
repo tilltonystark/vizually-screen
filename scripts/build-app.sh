@@ -16,12 +16,14 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>design.vizually.framecraft</string>
 <key>CFBundleName</key><string>Framecraft</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.2.0</string>
+<key>CFBundleShortVersionString</key><string>0.3.0</string>
 <key>CFBundleVersion</key><string>1</string>
 <key>LSMinimumSystemVersion</key><string>15.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSScreenCaptureUsageDescription</key><string>Record the display you select to create a video demo.</string>
 </dict></plist>
 PLIST
-codesign --force --sign - "$APP"
+# A stable developer identity avoids invalidating broad TCC grants on each build.
+# Native source picking remains available for ad-hoc local builds.
+codesign --force --sign "${FRAMECRAFT_SIGNING_IDENTITY:--}" "$APP"
 printf 'Built %s\n' "$APP"

@@ -1,7 +1,24 @@
-# Framecraft project instructions
+# Active user instructions
 
-Read HANDOFF.md first. Preserve the native macOS SwiftUI/ScreenCaptureKit architecture unless the user requests a platform change. Use bundled Geist for app-owned text; keep light mode and semantic appearance tokens. Keep meaningful checks runnable with command-line Swift (no XCTest dependency on this Mac).
+These instructions supersede earlier AGENTS.md instructions.
 
-Push major authorized milestones to https://github.com/tilltonystark/vizually-screen and update HANDOFF.md with verified behavior and remaining gaps. Never commit secrets, licensed skill content, generated .app bundles, .build artifacts or local captures. Do not assert Screen Studio/Shotbase quality parity without a controlled output comparison.
+## Figma account preference
 
-If Figma is used, always use satyam@vizually.design unless the user explicitly switches. Previously verified connection: link_6abd03794c848191980d937198c2b501; verify with whoami if identity is unclear.
+Always use satyam@vizually.design unless explicitly told to switch. Previously verified connection: link_6abd03794c848191980d937198c2b501 (2026-10-08). If identifiers change or email is hidden, verify with Figma whoami before writing. Do not silently fall back.
+
+## Prompt optimiser
+
+Turn rough asks into short, executable briefs before new work. Start with a size gate:
+- Small: one clear output, under about 10 minutes, low risk — do it without questions.
+- Medium: one deliverable with material ambiguity — gather context, ask at most three necessary questions in one batch with defaults, show a compact brief, then proceed on reversible work.
+- Big: multi-step/multi-day/several deliverables or planning — gather context, propose a big picture and 3–6 shippable milestones with done-tests, and wait for approval of those before starting milestone 1. Save the brief for future sessions.
+
+Do not ask what the chat, files, examples or skills already answer. Use existing references. Unanswered optional questions become stated assumptions. If Satyam says just do it/skip, state assumptions and execute. Do not restart an already authorized active milestone merely because instructions changed.
+
+Brief fields: GOAL, CONTEXT (link files), DONE WHEN (checkable), CONSTRAINTS, INPUTS & SOURCES, STEPS (verb first, one action and visible result), CHECKS, OUTPUT, ASSUMPTIONS. Drop empty fields and filler. Put the riskiest check early. For a big task, detail only the current milestone. After work report done-criteria as met/not met with evidence; unverified facts stay marked unverified.
+
+Keep token use proportionate: name files and lane-owning skills instead of repeating them; use one relevant example; avoid subagents or deep research unless needed.
+
+## Project context
+
+HANDOFF.md records the current implementation, evidence and known gaps. User separately authorized pushing major milestones to https://github.com/tilltonystark/vizually-screen . Never commit secrets, private captures, generated app bundles, or locally licensed skill content. Current active brief: docs/briefs/2026-11-03-quality-access-motion.md.

@@ -1,56 +1,64 @@
 # Framecraft handoff
 
-Updated 2026-11-03. Repository: https://github.com/tilltonystark/vizually-screen . Native macOS 15+ SwiftUI app, currently v0.2. User wants a Screen Studio-quality alternative; the current implementation is a foundation, with a substantially revised light editor. Full parity is not established.
+Updated 2026-11-03. Repository: https://github.com/tilltonystark/vizually-screen . Native macOS 15+ SwiftUI app, **v0.3**. User prioritizes capture/output detail and extremely smooth motion, with Shotbase as the installed reference. Full parity is unverified.
 
 ## User requirements
 
 - Native macOS, light UI, bundled Geist and antialiased text.
-- Use installed Shotbase as the live reference. User authorized inspecting its UI; request user action only if a permission/login prompt blocks access. Do not modify existing captures as an incidental test.
-- Keep major milestones pushed here; maintain this handoff for other AI tools.
-- The user invoked REA, Maggie Appleton's planning-agents article, Superpowers, and Emil's build-a-tool, color and ui-polish skills. References and adaptations are in docs. Locally licensed skills are ignored; use your own authorized installation. Do not commit tokens.
-- If Figma is used later, use account satyam@vizually.design (previous verified connection link_6abd03794c848191980d937198c2b501; verify identity before writing).
+- Inspect installed Shotbase without modifying personal captures. Use actual evidence, not feature claims, to assess output quality.
+- Push major milestones here and keep this handoff current.
+- Invoked REA, Maggie Appleton planning-agents, Superpowers, Emil build-a-tool/color/ui-polish/animations/ui-review. Locally licensed skills are ignored; use an authorized installation. Never commit credentials or private recordings.
+- Follow AGENTS.md prompt-optimiser for new work; current authorized milestone brief is `docs/briefs/2026-11-03-quality-access-motion.md`.
+- Figma: satyam@vizually.design; verify identity before writes if connection changes.
 
 ## Run and verify
 
 ```sh
 bash scripts/build-app.sh
 open dist/Framecraft.app
-CLANG_MODULE_CACHE_PATH=/tmp/framecraft-module-cache SWIFTPM_MODULECACHE_OVERRIDE=/tmp/framecraft-module-cache swift run --disable-sandbox --cache-path /tmp/framecraft-swift-cache --scratch-path .build FramecraftChecks
+CLANG_MODULE_CACHE_PATH=/tmp/framecraft-module-cache SWIFTPM_MODULECACHE_OVERRIDE=/tmp/framecraft-module-cache swift build --disable-sandbox --cache-path /tmp/framecraft-swift-cache --scratch-path .build
+.build/debug/FramecraftChecks
+.build/debug/FramecraftQuality /tmp/framecraft-quality
 ```
 
-The command-line tools on this Mac have Swift 6.1.2 but no XCTest. Checks are a standalone Swift executable using preconditions. The execution sandbox cannot access H.264 encoder services: build inside the sandbox, then run `.build/debug/FramecraftChecks` with approved host access if it reports AVFoundation -11834. Do not weaken sandbox configuration globally.
+Swift 6.1.2 command-line tools, no XCTest. Checks are a standalone executable with behavioral preconditions. Restricted sandbox cannot access media encoder services; run checks with authorized host access if AVFoundation -11834 occurs. Never weaken security globally. `FramecraftQuality --inspect /absolute/movie` audits codecs/timestamps; `--measure-only` remeasures previously generated candidates.
 
-`dist` and `.build` are ignored. Build script creates an ad-hoc signed `.app` and copies its SwiftPM resource bundle inside Contents/Resources. Fonts register at process scope through Core Text; bundled regular/medium/semibold are checked at startup. Geist license is included. Native text uses default macOS antialiasing; the Appearance Lab Core Text sample also explicitly enables it.
+Build script packages resources inside `.app/Contents/Resources`, version 0.3.0, uses `FRAMECRAFT_SIGNING_IDENTITY` or local ad-hoc signing. No valid signing identity is installed on this Mac. Ad-hoc cdhash changes on rebuild can invalidate old TCC entries. Native source picker grants per-session access instead of requiring full desktop enumeration. Geist registers at process scope, bundled OFL included. `.build`, `dist`, local skills, movies and project JSON are ignored.
 
 ## Architecture
 
-- `Sources/Framecraft/App.swift`: scenes, menus, light-mode root.
-- `StudioView.swift`: toolbar, preview, transport, empty state, recording sheet.
-- `StudioInspector.swift`: Canvas/Zoom tabs, source-thumbnail focus pad and bounded controls.
-- `StudioTimeline.swift`: source-time ruler, real video thumbnails, trim overlay and selectable zoom lanes.
-- `Theme.swift` and `AppearanceLab.swift`: Geist/resources, semantic colors/components, live theme controls and JSON persistence.
-- `Editor.swift`: AVPlayer, successful-load state commit, thumbnail generation, seeking/play state, selection, save/open/export.
-- `Capture.swift`: ScreenCaptureKit display + optional system-audio capture via SCRecordingOutput. Originals under ~/Movies/Framecraft.
-- `FramecraftCore/Project.swift`: Codable source-path project, trim/zoom interval math and validation.
-- `Renderer.swift`: shared preview/export Core Image compositor. Gradient framing and smooth manual zooms. Latest active zoom wins.
-- `Appearance.swift`: validated configuration and gamut-mapped OKLCH→sRGB/contrast utility.
-- `DemoClip.swift`: deterministic actual 8s 1280×720 H.264 demo; independent content drawn with CoreGraphics/CoreText.
-- `FramecraftChecks/Checks.swift`: core validation, supported-palette contrast, real demo generation/decode and styled/trimmed export/decode.
+- `App.swift`: scenes, menus, recording completion to editor, light root.
+- `StudioView.swift`, `StudioInspector.swift`, `StudioTimeline.swift`: dominant preview, native recording sheet, canvas/zoom controls, source focus pad, thumbnails/trim/zoom lanes.
+- `Theme.swift`, `AppearanceLab.swift`: Geist/resources, semantic colors, validated OKLCH appearance and live JSON controls.
+- `Capture.swift`: SCContentSharingPicker, native pointPixelScale sizing, 60fps request, session state/timer, source bounds and 120Hz host-clock pointer sampling. Compact capture uses 420 full-range surfaces; master BGRA. Original cursor can be retained instead.
+- `RecordingWriter.swift`: serial SCStreamOutput/AVAssetWriter, explicit profiles, first-frame clock, system audio, backpressure counts, held final frame, normalized smoothed pointer sidecar. Source-disconnect path finalizes received media.
+- `Editor.swift`: staged loads, automatic adjacent sidecar read, coalesced seeking, 60Hz observer, shared render state, source-preserving export and cancellation.
+- `ExportSheet.swift`: profiles, dimensions/cadence, master storage warning, progress/cancel.
+- Core `Project.swift`: validated JSON project, trim math, optional cursor track, continuous overlapping camera transforms with quintic envelopes.
+- `Motion.swift`: bounded symmetric 24ms Gaussian smoothing and timestamp interpolation. Arrow only; no click/shape events yet.
+- `Renderer.swift`: shared Core Image preview/export, independent 60fps composition clock, one Lanczos camera/framing resample, cursor overlay and rounded gradient frame. RenderState locks a project snapshot.
+- `VideoQuality.swift`: H.264 High/CABAC, HEVC Main, ProRes 4444; explicit bitrate/color/profile settings and native size math. SDR 8-bit pipeline; ProRes is not lossless/HDR.
+- `MediaExporter.swift`: reader/compositor/writer export, concurrent audio/video drain, trim, progress and cleanup. Compact outputs use explicit YCbCr, masters RGB. No silent resolution reduction.
+- `DemoClip.swift`: deterministic 8s 2560×1440/60fps sample. Demo cache v2.
+- `FramecraftChecks`: meaningful motion/model/theme/media/cancel checks. `FramecraftQuality`: synthetic screen-detail benchmark, presentation timestamp audit, comparison crops and overlapping-zoom/pointer demo.
 
-## Current evidence
+## Evidence and honest status
 
-Release app builds; earlier UI was observed in empty and populated states. Demo load, zoom selection and Appearance Lab opening were exercised natively. Appearance Lab exported `docs/appearance-review.json`, an example with hue 272; shipped default remains hue 265. Core/media checks pass, including short clips, trim bounds, project/appearance roundtrip, all allowed accent hues at tested canvas lightness endpoints/default, real demo decode, and a real trimmed MP4 export/decode. Rerun after changes. Final build was relaunched after unlock; source-thumbnail focus pad, playback/pause, zoom selection, background change and padding adjustment were visually exercised.
+See `docs/quality-report.md` for full results and boundaries. One 66.363s HEVC native window capture finalized at 3024×1654, with an audio track, 7,943 pointer samples and zero writer-backpressure drops. The source was largely static; this is not proof of 60 distinct screen updates, audio sync or long high-motion capture. Private media stays outside Git; the user's edited project was saved locally before relaunch.
 
-Shotbase dashboard, static editor and Motion workspace were observed live. Useful patterns: dominant canvas, grouped inspector, source thumbnail/focal control and separate motion timeline. No Shotbase output export or recording/cursor quality was measured. See docs/investigation.md. REA server/tools are not connected and no native binary was decompiled.
+Synthetic 1080p60 encode/decode test: prior preset text ROI PSNR 32.05dB, H.264 32.17, HEVC 32.21, ProRes4444 42.46. Compact gains are modest; master uses ~330Mb/s on this content. Actual decoded frames and sorted PTS are measured, not estimated from settings. An initial RGB→compact conversion regression was caught and corrected with explicit YCbCr surfaces. All candidates present 120 frames at ~16.67ms gaps. Safe synthetic report/crops are in `docs/quality-assets`.
 
-## Known gaps and next work
+Actual REA CLI 6.8.0 outputs are under `docs/evidence` (desktop inventory, plist, Mach-O). Shotbase 1.7.1 imports native capture/encoding/composition frameworks and AVAssetWriter controls. These do not reveal actual encoder settings or cursor algorithms. No functions decompiled/dynamically traced; Node25 used successfully but outside REA declared supported engines. Earlier investigation's “no REA evidence” statement describes the initial stage only.
 
-1. Finish manual capture permission, display stop/start/disconnect and audio synchronization checks. Avoid quitting during a recording/export: recovery and quit guards are not implemented.
-2. Build a controlled comparison: record the same scripted interactions in Framecraft and the reference, compare sharpness, zoom/pan timing and exported media. Do not claim parity from UI screenshots.
-3. Record a timestamped cursor/click sidecar; implement suggested zooms and separately rendered smooth cursor/click effects. Current cursor is baked into capture and zooms are manual.
-4. Webcam/mic tracks, motion blur, captions and camera layout transitions are absent.
-5. Add undo/autosave, relocatable projects, export progress/cancel, source relinking and signed/notarized distribution. Project JSON references an absolute source path. Demo source is temporary, so don't rely on saved demo projects after OS cleanup.
-6. Migrate the deprecated synchronous AVVideoComposition filter initializer to its async replacement. Live drag updates currently reconstruct composition/reseek; profile latency before adding more effects.
-7. Appearance Lab tunes the actual app in memory; exported JSON must be imported next launch or bundled via rebuild. It does not autosave theme settings.
+Shotbase dashboard, static editor, Motion workspace and capture menu were observed live. Native capture overlay/import could not be controlled reliably. **No matched competitor export or controlled side-by-side motion test exists.** Do not claim parity from UI similarity, framework imports or our synthetic scores. Independent agent review was unavailable; author self-review only. Final release empty-state UI was observed; UI-control calls timed out after opening the preserved project, so final populated-preview/export-sheet visual verification remains incomplete. A local process sample showed the main thread idle in the normal event loop, not a demonstrated deadlock. See quality report.
 
-Do not broaden testing solely to add snapshots or mirror SwiftUI implementation. Use behavioral media/interval tests and actual native visual checks. Never use shell input synthesis for app UI; use available computer-use tools.
+## Next work, in order
+
+1. Controlled same-content capture/export comparison in Shotbase and Framecraft: pixel sharpness, colored text, camera path, cursor timing, audio sync. Use non-sensitive calibration content and user assistance only for inaccessible system overlays.
+2. Long/high-motion capture, final compact-surface capture path, window movement/resizing, mixed-DPI/rotated sources and pointer edge checks. Current live capture predates the final 420-surface refinement; synthetic compact exports are tested.
+3. Subjective motion tuning from real side-by-side playback. Current camera curves are continuous and mathematically checked, not proven equivalent to Shotbase. New recordings can smooth pointer; old baked cursor cannot be removed.
+4. Click events and editable automatic zoom suggestions, cursor shapes and motion blur, then webcam/mic/captions if requested.
+5. Undo/autosave, relocatable project bundles/relinking, quit guards, stable signing and notarization.
+6. Replace deprecated synchronous AVVideoComposition initializer with async API; profile paused preview invalidation and slider latency. Current render parameters share state; avoid reconstructing the whole composition on every active playback drag.
+
+Appearance Lab does not autosave settings; import JSON or bundle via rebuild. Demo source is temporary. Projects reference absolute paths. Preserve current work before switching projects/relaunching. Use CUA for UI, never shell input synthesis. Do not repeat broad test passes without a change or unresolved concern.
