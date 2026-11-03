@@ -1,0 +1,14 @@
+.build/
+dist/
+.DS_Store
+
+# Locally licensed agent skills
+.claude/
+.codex/
+.cursor/
+.gemini/
+
+# Local media and edit sessions
+*.mp4
+*.mov
+*.framecraft.json

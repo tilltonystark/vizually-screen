@@ -1,0 +1,13 @@
+# Framecraft light studio
+
+User requirements: native macOS; a materially more polished editor; light mode; Geist; antialiased text; apply build-a-tool, color, ui-polish and Superpowers; establish access needed for real Screen Studio comparison. Existing recording/export functionality must remain available.
+
+Approach: evolve the native SwiftUI editor, retaining ScreenCaptureKit/AVFoundation. A web wrapper would replace working native behavior and introduce a bridge; a cosmetic palette swap would leave the weak workflow intact. The selected implementation is our recommendation under the user's explicit redesign authorization, not an independently user-approved mockup.
+
+Design: warm-neutral light shell, white inspector, dark high-contrast text, restrained blue-violet primary accent. A compact toolbar holds project identity, recording, import and export. Remove the permanent recording sidebar; use a focused recording sheet. The preview owns the space. A bottom timeline shows real thumbnails, a ruler, selected zoom regions and current time. Inspector tabs expose Canvas and Zoom controls; selected zoom focus can be manipulated on a two-dimensional pad. Buttons have consistent hover, press, disabled and keyboard focus states. Small controls retain at least 40pt targets where they do not overlap. Geist regular/medium/semibold are bundled with license and registered at process scope. All app-owned text uses Geist, including dynamic tabular time labels. macOS system dialogs remain OS-rendered. Core Text rendering uses native antialiasing; no global system preferences are changed.
+
+Build-a-tool diagnosis: matching plus staging plus dial-in. A deterministic synthetic demo opens a populated editor immediately. An isolated Appearance Lab window uses shared production components and applies validated color/spacing/radius configuration live; import/export JSON persists decisions. Default configuration ships as a bundle resource. This does not pretend to compare to Screen Studio without a reference. User has been asked for access to a usable installed Screen Studio app.
+
+Boundaries: no claim of motion/output parity, automatic zoom detection, custom cursor rendering or camera capture. Existing capture/audio limitations remain explicit. Light styling does not change export colors. No dead placeholder product buttons. Empty, populated, loading, exporting, error and disabled states must be represented honestly.
+
+Acceptance: build and real MP4 roundtrip pass; Geist registration is verified; appearance roundtrip/bounds and color contrast checked; native app observed in empty and populated states; play, seek, select zoom, change framing and open Appearance Lab exercised. Record remaining comparison and capture gaps.
