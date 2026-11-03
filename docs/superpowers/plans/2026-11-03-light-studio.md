@@ -20,7 +20,7 @@
 - [x] Appearance Lab: separate native window, bounded live controls, import/export config with visible saved path; inspect and verify serialization.
 - [x] Review findings fixed, final build passed, native empty/populated/lab checks performed; independent reviewer stopped at account usage limit and remaining review was done by author.
 
-Validation: checks executable passed real demo+export/decode and model/theme bounds/roundtrips/contrast. Release app built and ad-hoc signed. A later screen lock prevented a final screenshot after the source-thumbnail focus-pad refinement; that refinement compiled but was not visually rechecked.
+Validation: checks executable passed real demo+export/decode and model/theme bounds/roundtrips/contrast. Release app built and ad-hoc signed. After the user unlocked the Mac, the final build was relaunched and the source-thumbnail focus pad, playback/pause, zoom selection, background/padding updates were visually checked.
 
 ## Review focus
 - Cancelled dialogs and media loading failure preserve the previous project.

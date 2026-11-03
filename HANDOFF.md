@@ -39,7 +39,7 @@ The command-line tools on this Mac have Swift 6.1.2 but no XCTest. Checks are a 
 
 ## Current evidence
 
-Release app builds; earlier UI was observed in empty and populated states. Demo load, zoom selection and Appearance Lab opening were exercised natively. Appearance Lab exported `docs/appearance-review.json`, an example with hue 272; shipped default remains hue 265. Core/media checks pass, including short clips, trim bounds, project/appearance roundtrip, all allowed accent hues at tested canvas lightness endpoints/default, real demo decode, and a real trimmed MP4 export/decode. Rerun after changes. The final source-thumbnail focus-pad refinement compiled; a later screen lock prevented its final visual recheck.
+Release app builds; earlier UI was observed in empty and populated states. Demo load, zoom selection and Appearance Lab opening were exercised natively. Appearance Lab exported `docs/appearance-review.json`, an example with hue 272; shipped default remains hue 265. Core/media checks pass, including short clips, trim bounds, project/appearance roundtrip, all allowed accent hues at tested canvas lightness endpoints/default, real demo decode, and a real trimmed MP4 export/decode. Rerun after changes. Final build was relaunched after unlock; source-thumbnail focus pad, playback/pause, zoom selection, background change and padding adjustment were visually exercised.
 
 Shotbase dashboard, static editor and Motion workspace were observed live. Useful patterns: dominant canvas, grouped inspector, source thumbnail/focal control and separate motion timeline. No Shotbase output export or recording/cursor quality was measured. See docs/investigation.md. REA server/tools are not connected and no native binary was decompiled.
 
