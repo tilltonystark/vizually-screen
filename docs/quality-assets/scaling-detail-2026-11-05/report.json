@@ -1,0 +1,26 @@
+[
+  {
+    "filter" : "lanczos",
+    "textROI_PSNR" : 20.464492054342102
+  },
+  {
+    "filter" : "lanczos-srgb",
+    "textROI_PSNR" : 20.842764408019079
+  },
+  {
+    "filter" : "bicubic-srgb",
+    "textROI_PSNR" : 20.82972649633211
+  },
+  {
+    "filter" : "bicubic",
+    "textROI_PSNR" : 20.475806083775687
+  },
+  {
+    "filter" : "lanczos-sharp-025",
+    "textROI_PSNR" : 19.935216338295799
+  },
+  {
+    "filter" : "lanczos-sharp-050",
+    "textROI_PSNR" : 19.415538869393739
+  }
+]

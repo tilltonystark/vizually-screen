@@ -1,12 +1,42 @@
 import Foundation
 import AVFoundation
 import CoreText
+import CoreImage
 import VizuallyScreenCore
 import ImageIO
 import UniformTypeIdentifiers
 
 @main struct QualityBenchmark {
     static func main() async throws {
+        if CommandLine.arguments.count>3,CommandLine.arguments[1] == "--detail-frames" {
+            let source=URL(fileURLWithPath:CommandLine.arguments[2])
+            let directory=URL(fileURLWithPath:CommandLine.arguments[3])
+            let asset=AVURLAsset(url:source),duration=try await asset.load(.duration).seconds
+            let time=min(max(0,duration/2),5)
+            var project=Project(sourcePath:source.path,trimEnd:duration)
+            let start=max(0,time-2),end=min(duration,time+2)
+            project.zooms=[Zoom(start:start,duration:end-start,scale:1.65)]
+            try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
+            for zoom in [false,true] {
+                let generator=AVAssetImageGenerator(asset:asset)
+                generator.appliesPreferredTrackTransform=true
+                generator.requestedTimeToleranceBefore = .zero;generator.requestedTimeToleranceAfter = .zero
+                if zoom { generator.videoComposition=Renderer.composition(asset:asset,project:project) }
+                let result=try await generator.image(at:CMTime(seconds:time,preferredTimescale:60_000))
+                let image=result.image,name=zoom ? "zoomed":"source"
+                let url=directory.appendingPathComponent("\(name).png")
+                guard let destination=CGImageDestinationCreateWithURL(url as CFURL,UTType.png.identifier as CFString,1,nil) else { throw CocoaError(.fileWriteUnknown) }
+                CGImageDestinationAddImage(destination,image,nil)
+                guard CGImageDestinationFinalize(destination) else { throw CocoaError(.fileWriteUnknown) }
+                print("\(name): \(image.width)×\(image.height), actualTime=\(result.actualTime.seconds)")
+                let crop=CGRect(x:max(0,image.width/2-420),y:max(0,image.height/2-180),width:min(840,image.width),height:min(360,image.height))
+                if let detail=image.cropping(to:crop),let destination=CGImageDestinationCreateWithURL(directory.appendingPathComponent("\(name)-detail.png") as CFURL,UTType.png.identifier as CFString,1,nil) {
+                    CGImageDestinationAddImage(destination,detail,nil);CGImageDestinationFinalize(destination)
+                }
+            }
+            print("Diagnostic frames saved locally. This does not export or measure competitor footage.")
+            return
+        }
         if CommandLine.arguments.count>2,CommandLine.arguments[1] == "--inspect" {
             let url=URL(fileURLWithPath:CommandLine.arguments[2]),asset=AVURLAsset(url:URL(fileURLWithPath:CommandLine.arguments[2]))
             var videos:[[String:Any]]=[]
@@ -22,6 +52,10 @@ import UniformTypeIdentifiers
         }
         let directory=URL(fileURLWithPath:CommandLine.arguments.dropFirst().first ?? "/tmp/vizually-screen-quality")
         try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
+        if CommandLine.arguments.contains("--scaling-detail") {
+            try scalingDetail(directory)
+            return
+        }
         let source=directory.appendingPathComponent("reference.mov")
         if !FileManager.default.fileExists(atPath:source.path) { try await makeSource(source) }
         let asset=AVURLAsset(url:source)
@@ -91,10 +125,11 @@ import UniformTypeIdentifiers
         print("Report: \(directory.appendingPathComponent("quality-report.json").path)")
     }
     static let width=1920,height=1080
-    static func pattern(_ time:Double) -> CGImage {
+    static func pattern(_ time:Double,magnification:Double=1) -> CGImage {
         let c=CGContext(data:nil,width:width,height:height,bitsPerComponent:8,bytesPerRow:width*4,space:CGColorSpace(name:CGColorSpace.sRGB)!,bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
         c.setFillColor(CGColor(gray:1,alpha:1));c.fill(CGRect(x:0,y:0,width:width,height:height))
         c.translateBy(x:0,y:CGFloat(height));c.scaleBy(x:1,y:-1);c.setShouldAntialias(true)
+        c.scaleBy(x:magnification,y:magnification)
         func text(_ value:String,_ x:CGFloat,_ y:CGFloat,_ size:CGFloat,_ color:CGColor) {
             let string=NSAttributedString(string:value,attributes:[NSAttributedString.Key(kCTFontAttributeName as String):CTFontCreateWithName("HelveticaNeue" as CFString,size,nil),NSAttributedString.Key(kCTForegroundColorAttributeName as String):color])
             c.saveGState();c.translateBy(x:x,y:y+size);c.scaleBy(x:1,y:-1);c.textPosition = .zero;c.textMatrix = .identity;CTLineDraw(CTLineCreateWithAttributedString(string),c);c.restoreGState()
@@ -131,6 +166,39 @@ import UniformTypeIdentifiers
             guard adaptor.append(b,withPresentationTime:CMTime(value:Int64(frame),timescale:60)) else { throw writer.error! }
         }
         input.markAsFinished();await writer.finishWriting();guard writer.status == .completed else { throw writer.error! }
+    }
+    static func scalingDetail(_ directory:URL) throws {
+        let scale=1.65,rect=CGRect(x:0,y:0,width:width,height:height)
+        let input=CIImage(cgImage:pattern(0))
+        let lanczos=input.applyingFilter("CILanczosScaleTransform",parameters:[kCIInputScaleKey:scale,kCIInputAspectRatioKey:1])
+        let candidates:[(String,CIImage)]=[
+            ("lanczos",lanczos),
+            ("lanczos-srgb",input.applyingFilter("CILinearToSRGBToneCurve").applyingFilter("CILanczosScaleTransform",parameters:[kCIInputScaleKey:scale,kCIInputAspectRatioKey:1]).applyingFilter("CISRGBToneCurveToLinear")),
+            ("bicubic-srgb",input.applyingFilter("CILinearToSRGBToneCurve").applyingFilter("CIBicubicScaleTransform",parameters:[kCIInputScaleKey:scale,kCIInputAspectRatioKey:1,"inputB":0,"inputC":0.5]).applyingFilter("CISRGBToneCurveToLinear")),
+            ("bicubic",input.applyingFilter("CIBicubicScaleTransform",parameters:[kCIInputScaleKey:scale,kCIInputAspectRatioKey:1,"inputB":0,"inputC":0.5])),
+            ("lanczos-sharp-025",lanczos.applyingFilter("CISharpenLuminance",parameters:[kCIInputSharpnessKey:0.25])),
+            ("lanczos-sharp-050",lanczos.applyingFilter("CISharpenLuminance",parameters:[kCIInputSharpnessKey:0.5]))]
+        let context=CIContext(),space=CGColorSpace(name:CGColorSpace.sRGB)!
+        let reference=pattern(0,magnification:scale)
+        let roi=CGRect(x:40,y:130,width:1000,height:750)
+        let expected=pixels(reference.cropping(to:roi)!)
+        var results:[[String:Any]]=[]
+        for (name,candidate) in candidates {
+            let positioned=candidate.transformed(by:CGAffineTransform(translationX:0,y:Double(height)*(1-scale))).cropped(to:rect)
+            guard let output=context.createCGImage(positioned,from:rect,format:.RGBA8,colorSpace:space) else { throw CocoaError(.fileWriteUnknown) }
+            let actual=pixels(output.cropping(to:roi)!)
+            var error=0.0,count=0
+            for base in stride(from:0,to:actual.count,by:4) { for channel in 0..<3 {
+                let d=Double(actual[base+channel])-Double(expected[base+channel]);error+=d*d;count+=1
+            } }
+            let result:[String:Any]=["filter":name,"textROI_PSNR":10*log10(255*255/max(0.000001,error/Double(count)))]
+            results.append(result);print(result)
+            for (label,image) in [(name,output),("vector-reference",reference)] {
+                let destination=CGImageDestinationCreateWithURL(directory.appendingPathComponent("\(label)-detail.png") as CFURL,UTType.png.identifier as CFString,1,nil)!
+                CGImageDestinationAddImage(destination,image.cropping(to:CGRect(x:40,y:150,width:840,height:360))!,nil);CGImageDestinationFinalize(destination)
+            }
+        }
+        try JSONSerialization.data(withJSONObject:results,options:[.prettyPrinted,.sortedKeys]).write(to:directory.appendingPathComponent("scaling-detail-report.json"))
     }
     static func pixels(_ image:CGImage) -> [UInt8] {
         let width=image.width,height=image.height
