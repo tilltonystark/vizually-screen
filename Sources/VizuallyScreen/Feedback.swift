@@ -13,7 +13,7 @@ struct FeedbackTargets:PreferenceKey {
 }
 extension View {
     func feedbackTarget(_ id:String,_ label:String,file:String = #fileID,line:Int = #line) -> some View {
-        anchorPreference(key:FeedbackTargets.self,value:.bounds) { [FeedbackTarget(id:id,label:label,file:file,line:line,anchor:$0)] }
+        transformAnchorPreference(key:FeedbackTargets.self,value:.bounds) { targets,anchor in targets.append(FeedbackTarget(id:id,label:label,file:file,line:line,anchor:anchor)) }
     }
 }
 struct AppFeedback:Codable,Identifiable {

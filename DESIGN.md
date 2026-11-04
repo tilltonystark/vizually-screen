@@ -45,3 +45,5 @@ BackgroundPicker: Gradient/Color/Image categories (native segmented picker with 
 Home uses the shared 56pt header, 190pt library rail, 32pt content inset, adaptive recording cards and native source thumbnails. No destructive library actions. Missing originals stay visible as unavailable.
 
 Feedback is a test-environment layer: a small comment icon toggles selection; hovering outlines the smallest instrumented SwiftUI target; a click opens a 320pt draft beside the pin. Content actions are intercepted while selecting. Escape exits. Saved pins are target-relative, local comments survive a disconnected agent, and delivery state distinguishes saved versus sent. The feedback list is separate from customer-facing shared video comments.
+
+Inspector density after in-app feedback: horizontal inset16pt, vertical20pt, tab height36pt with10pt group inset.

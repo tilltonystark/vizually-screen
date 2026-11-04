@@ -10,12 +10,12 @@ struct StudioInspector: View {
             HStack(spacing: 4) {
                 tabButton("Canvas", icon: "rectangle.on.rectangle")
                 tabButton("Zoom", icon: "plus.magnifyingglass")
-            }.padding(12)
+            }.padding(10)
             Rule()
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     if tab == "Canvas" { canvasControls } else { zoomControls }
-                }.padding(20)
+                }.padding(.horizontal,16).padding(.vertical,20)
             }
             if editor.project != nil {
                 Rule()
@@ -26,10 +26,10 @@ struct StudioInspector: View {
     private func tabButton(_ name: String, icon: String) -> some View {
         Button { tab = name } label: {
             HStack(spacing: 6) { Image(systemName: icon); Text(name) }.font(Geist.font(12, .medium))
-                .frame(maxWidth: .infinity).frame(height: 40)
+                .frame(maxWidth: .infinity).frame(height: 36)
                 .foregroundStyle(tab == name ? theme.accent : Ink.secondary)
                 .background(tab == name ? theme.tint : .clear, in: RoundedRectangle(cornerRadius: 8))
-        }.buttonStyle(.plain).accessibilityAddTraits(tab == name ? .isSelected : [])
+        }.buttonStyle(.plain).feedbackTarget("inspector.tab.\(name)","\(name) tab").accessibilityAddTraits(tab == name ? .isSelected : [])
     }
     private func heading(_ text: String, detail: String? = nil) -> some View {
         HStack(spacing:StudioLayout.helpGap) {

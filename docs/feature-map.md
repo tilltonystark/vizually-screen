@@ -32,7 +32,7 @@ P0 means release-blocking core quality. P1 means a valuable next workflow after 
 | Export choices | Understand size versus fidelity | P0 | High quality / Most compatible / Maximum detail | Unverified | Decoded detail, actual size, compatibility and export speed measured per option |
 | Export cancellation / failure | No corrupt result or lost work | P0 | Cancellation cleanup test passes | Unverified | Disk full, cancel and encoder error recover without losing project |
 | Saved projects / reopen | Keep edits between sessions | P0 | Built; legacy format supported | L: library | Save/reopen preserves source, trims, focus, pointer and background |
-| Home / local recording history | Find earlier work | P1 | Built in working tree; native QA pending | U: Open Base; A: library | Old and new sources discoverable; missing file is clear; latest edit reopens |
+| Home / local recording history | Find earlier work | P1 | Built; home thumbnails/open/return observed | U: Open Base; A: library | Old and new sources discoverable; missing file is clear; latest edit reopens |
 | Menu-bar quick recording | One click from any app | P1 | Partial: stop action only | U: Recording / New Capture | Open source selection from menu, stop reliably, no duplicate windows |
 | Global capture shortcuts | Fast repeat capture | P1 | Not built; in-app shortcuts only | U: several shortcuts | Works while another app focused; collisions and accessibility handled |
 | Capture tray | Retrieve recent captures quickly | P2 | Not built | U: Capture Tray | Validate whether home + menu recents already meet need |
@@ -53,7 +53,7 @@ P0 means release-blocking core quality. P1 means a valuable next workflow after 
 | AI filenames / tags / search | Organize large libraries | P3 | Not built | A | Start with reliable local library/search; measure whether AI helps |
 | Capture reminders | Follow-up utility | P3 | Not built | A | User demand before additional notifications |
 | Settings / updates | Predictable maintenance | P1 | Partial app controls; no updater | U | Stable identity, permission continuity, migration and signed distribution |
-| Native pinned app feedback | Report precise defects to this build | P1 | In progress; independent test-environment feature | U: Send Feedback is not evidence of equivalent annotation | Hover targets accurate, comments persist with source context, no accidental capture activation |
+| Native pinned app feedback | Report precise defects to this build | P1 | Built; direct agent delivery confirmed; region hover observed after targeting fix; tab pin recheck pending | U: Send Feedback is not evidence of equivalent annotation | Hover targets accurate, comments persist with source context, no accidental capture activation |
 
 The A rows summarize advertised features from the [official Shotbase page](https://shotbase.com/). Their existence alone is not a reason to implement them. Unverified rows require observation, not inference.
 
@@ -61,7 +61,7 @@ The A rows summarize advertised features from the [official Shotbase page](https
 
 1. **Source-fit checkpoint — pushed:** native bounds, zero-padding default, simple export names. Gate: rerun the user's exact small-window case; current synthetic crop test is not that live proof.
 2. **Motion checkpoint — pushed:** smoothing, automatic editable focus, continuous camera ramps. Gate: identical source gestures and matched Shotbase output review. Mathematical continuity alone does not establish pleasant motion.
-3. **Workspace checkpoint — in progress:** rename, aligned header, backgrounds, home/reopen, pinned app feedback. Gate: normal capture → edit → home → reopen → export plus feedback save/reopen. Commit and push with evidence and explicit remaining gaps.
+3. **Workspace checkpoint — pushed (342bf61); follow-up polish in progress:** rename, aligned header, backgrounds, home/reopen, pinned app feedback. Gate: normal capture → edit → home → reopen → export plus feedback save/reopen. Commit and push with evidence and explicit remaining gaps.
 4. **Core quality release — next:** fix defects found by the matched comparison before new capture types. Gate: native detail, timing, audio, permission and endurance matrix below.
 5. **Quick-access release — proposed, not started:** useful menu-bar start/open actions and global shortcuts. Gate: complete capture from another foreground app; no project loss. Discuss scope after quality results.
 6. **Screenshot workflow — candidate:** capture plus focused annotation, followed only by capabilities supported by actual demand. Do not start scrolling/web/OCR/AI as one broad parity project.
@@ -81,7 +81,7 @@ Record hardware, macOS, Shotbase version, app build, display scale, selected sou
 | Audio | Actual loopback/mic impulse or clap and drift at beginning/end; target sync within 40 ms, explicitly a target | Track/trim checks only; sync unverified |
 | Reliability | Permission states, missing source, disk-full/cancel, 5-minute then 30-minute capture/export | Cancellation checked; full matrix pending |
 | Editor parity | Same paused and playing frame in preview/export after background/zoom edits | Cache fix built; final live regression pending |
-| Library | Save edit, home, reopen, restart, missing source, legacy recording; no mutation of originals | Catalog/working-copy implementation; native QA pending |
+| Library | Save edit, home, reopen, restart, missing source, legacy recording; no mutation of originals | Catalog regression passed; native thumbnail/open/home observed; restart-edit matrix pending |
 
 PSNR or a high bitrate is supporting evidence, not a substitute for readable output. No claim of “same quality” until these records exist. Update each row with artifact links and measured results, not just a checkbox.
 
