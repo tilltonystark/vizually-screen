@@ -27,10 +27,14 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     private var selectedArea:CGRect?
     private var selectedAreaDisplayID:CGDirectDisplayID?
     private let areaIndicator=RecordingAreaIndicator()
-    func hideAreaIndicator() { areaIndicator.hide() }
+    private var activeArea:(displayID:CGDirectDisplayID,rect:CGRect)?
+    func hideAreaIndicator() { guard stream == nil,!recording else { return };areaIndicator.hide() }
     func restoreAreaIndicator() {
-        if let pendingArea { areaIndicator.show(displayID:pendingArea.displayID,rect:pendingArea.rect,recording:false) }
-        else if let selectedArea,let selectedAreaDisplayID { areaIndicator.show(displayID:selectedAreaDisplayID,rect:selectedArea,recording:recording) }
+        if stream != nil {
+            if let activeArea { areaIndicator.show(displayID:activeArea.displayID,rect:activeArea.rect) }
+            else { areaIndicator.hide() }
+        } else if let pendingArea { areaIndicator.show(displayID:pendingArea.displayID,rect:pendingArea.rect) }
+        else if let selectedArea,let selectedAreaDisplayID { areaIndicator.show(displayID:selectedAreaDisplayID,rect:selectedArea) }
         else { areaIndicator.hide() }
     }
     @Published var selectionStatus:String?
@@ -140,6 +144,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
         return filter.contentRect
     }
     private func applySource(_ filter:SCContentFilter) {
+        guard stream == nil,!recording,!busy else { return }
         areaIndicator.hide();selectedAreaDisplayID=nil
         self.filter=filter;selectedArea=nil;areaPreview=nil;hasSource=true;picking=false;selectionStatus=nil;error=nil
         let size=VideoQuality.nativeSize(points:sourceBounds(filter).size,scale:Double(filter.pointPixelScale))
@@ -153,6 +158,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
         guard pendingArea == nil else { error="Authorize the selected area before recording.";return }
         guard let filter else { chooseSource();return }
         busy=true;error=nil
+        if let selectedArea,let selectedAreaDisplayID { activeArea=(selectedAreaDisplayID,selectedArea) } else { activeArea=nil }
         let session=UUID();sessionID=session
         do {
             let config=SCStreamConfiguration()
@@ -189,6 +195,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
         } catch { fail(error) }
     }
     private func beginRecordingClock() {
+        guard !stopping,stream != nil else { return }
         recording=true;busy=false;began=Date();elapsed=0
         restoreAreaIndicator()
         recordingTimer=Timer.scheduledTimer(withTimeInterval:0.1,repeats:true) { [weak self] _ in
@@ -211,18 +218,19 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
             cleanup();onFinish?(result)
         } catch { fail(error) }
     }
-    private func cleanup() { sessionID=UUID();recordingTimer?.invalidate();recordingTimer=nil;began=nil;cursorTimer?.invalidate();cursorTimer=nil;stream=nil;output=nil;recording=false;busy=false;stopping=false;filter=nil;areaIndicator.hide();selectedAreaDisplayID=nil;selectedArea=nil;pendingArea=nil;areaPreview=nil;selectionStatus=nil;areaSelector.cancel();hasSource=false;sourceSummary="Choose a source for the next recording";SCContentSharingPicker.shared.isActive=false }
+    private func cleanup() { sessionID=UUID();recordingTimer?.invalidate();recordingTimer=nil;began=nil;cursorTimer?.invalidate();cursorTimer=nil;stream=nil;output=nil;recording=false;busy=false;stopping=false;filter=nil;activeArea=nil;areaIndicator.hide();selectedAreaDisplayID=nil;selectedArea=nil;pendingArea=nil;areaPreview=nil;selectionStatus=nil;areaSelector.cancel();hasSource=false;sourceSummary="Choose a source for the next recording";SCContentSharingPicker.shared.isActive=false }
     private func fail(_ error: Error) {
         output?.cancel();self.error="\(error.localizedDescription)\n\((error as NSError).domain) (\((error as NSError).code)). Select the source again with the macOS picker. If macOS still refuses, quit Vizually Screen and re-enable this build in Screen & System Audio Recording."
         cleanup()
     }
-    nonisolated func contentSharingPicker(_ picker:SCContentSharingPicker,didCancelFor stream:SCStream?) { Task { @MainActor in self.picking=false;self.selectionStatus=self.pendingArea == nil ? nil:"Area selected · Permission cancelled. Try again.";self.restoreAreaIndicator() } }
+    nonisolated func contentSharingPicker(_ picker:SCContentSharingPicker,didCancelFor stream:SCStream?) { Task { @MainActor in guard self.stream == nil,!self.recording,!self.busy else { return };self.picking=false;self.selectionStatus=self.pendingArea == nil ? nil:"Area selected · Permission cancelled. Try again.";self.restoreAreaIndicator() } }
     nonisolated func contentSharingPicker(_ picker:SCContentSharingPicker,didUpdateWith filter:SCContentFilter,for stream:SCStream?) {
         Task { @MainActor in
+            guard self.stream == nil,!self.recording,!self.busy else { return }
             if self.pendingArea != nil { self.acceptAreaSource(filter) } else { self.applySource(filter) }
         }
     }
-    nonisolated func contentSharingPickerStartDidFailWithError(_ error:Error) { Task { @MainActor in self.picking=false;self.fail(error) } }
+    nonisolated func contentSharingPickerStartDidFailWithError(_ error:Error) { Task { @MainActor in guard self.stream == nil,!self.recording,!self.busy else { return };self.picking=false;self.fail(error) } }
     nonisolated func stream(_ stream:SCStream,didStopWithError error:Error) {
         Task { @MainActor in
             guard self.stream === stream,!self.stopping else { return }

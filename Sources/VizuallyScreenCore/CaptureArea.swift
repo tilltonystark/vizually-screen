@@ -25,12 +25,14 @@ extension CaptureArea {
     package static func appKitBounds(local: CGRect, displayFrame: CGRect) -> CGRect {
         CGRect(x:displayFrame.minX+local.minX,y:displayFrame.maxY-local.maxY,width:local.width,height:local.height)
     }
-    /// A one-point gap keeps every indicator window outside the captured rectangle.
-    /// Do not rely on NSWindow.sharingType to exclude UI from ScreenCaptureKit.
-    package static func indicatorStrips(around rect:CGRect) -> [CGRect] {
-        [CGRect(x:rect.minX-3,y:rect.minY-3,width:2,height:rect.height+6),
-         CGRect(x:rect.maxX+1,y:rect.minY-3,width:2,height:rect.height+6),
-         CGRect(x:rect.minX-1,y:rect.minY-3,width:rect.width+2,height:2),
-         CGRect(x:rect.minX-1,y:rect.maxY+1,width:rect.width+2,height:2)]
+    /// Nonoverlapping masks cover only the display pixels outside the recording area.
+    package static func outsideMasks(around area:CGRect,in display:CGRect) -> [CGRect] {
+        let rect=area.intersection(display)
+        guard !rect.isNull,!rect.isEmpty else { return display.isEmpty ? []:[display] }
+        return [CGRect(x:display.minX,y:display.minY,width:display.width,height:rect.minY-display.minY),
+                CGRect(x:display.minX,y:rect.maxY,width:display.width,height:display.maxY-rect.maxY),
+                CGRect(x:display.minX,y:rect.minY,width:rect.minX-display.minX,height:rect.height),
+                CGRect(x:rect.maxX,y:rect.minY,width:display.maxX-rect.maxX,height:rect.height)]
+            .filter { !$0.isEmpty }
     }
 }

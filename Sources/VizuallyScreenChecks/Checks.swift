@@ -40,13 +40,20 @@ struct VizuallyScreenChecks {
         XCTAssertEqual((global.midX-global.minX)/global.width,0.5,accuracy:0.0001)
         let appKit=CaptureArea.appKitBounds(local:forward,displayFrame:CGRect(x:-1512,y:200,width:1512,height:982))
         XCTAssertEqual(appKit,CGRect(x:-1480,y:792,width:588,height:349))
-        for area in [appKit,CGRect(x:0,y:0,width:1512,height:982),CGRect(x:100,y:-1080,width:400,height:300)] {
-            let strips=CaptureArea.indicatorStrips(around:area)
-            XCTAssertEqual(strips.count,4)
-            for strip in strips { XCTAssertTrue(strip.width > 0 && strip.height > 0);XCTAssertTrue(strip.intersection(area).isNull || strip.intersection(area).isEmpty) }
-            XCTAssertEqual(strips[0].maxX,area.minX-1,accuracy:0.0001)
-            XCTAssertEqual(strips[1].minX,area.maxX+1,accuracy:0.0001)
+        let display=CGRect(x:-1512,y:200,width:1512,height:982)
+        for area in [appKit,display,CGRect(x:-1512,y:200,width:400,height:300),CGRect(x:-412,y:882,width:412,height:300)] {
+            let masks=CaptureArea.outsideMasks(around:area,in:display)
+            var covered=0.0
+            for (index,mask) in masks.enumerated() {
+                XCTAssertTrue(mask.width > 0 && mask.height > 0)
+                XCTAssertTrue(mask.intersection(area).isNull || mask.intersection(area).isEmpty)
+                XCTAssertTrue(display.contains(mask))
+                covered += mask.width*mask.height
+                for other in masks.dropFirst(index+1) { XCTAssertTrue(mask.intersection(other).isNull || mask.intersection(other).isEmpty) }
+            }
+            XCTAssertEqual(covered+area.width*area.height,display.width*display.height,accuracy:0.0001)
         }
+        XCTAssertTrue(CaptureArea.outsideMasks(around:display,in:display).isEmpty)
         XCTAssertTrue(CaptureArea.selection(from:.zero,to:CGPoint(x:2,y:3),displaySize:size,pixelScale:2) == nil)
         XCTAssertTrue(CaptureArea.selection(from:CGPoint(x:Double.nan,y:0),to:.zero,displaySize:size,pixelScale:2) == nil)
         XCTAssertTrue(CaptureArea.selection(from:.zero,to:CGPoint(x:100,y:100),displaySize:size,pixelScale:0) == nil)

@@ -36,3 +36,11 @@ CaptureArea.appKitBounds converts display-local top-left selection points to App
 - Full media regressions pass: source crop, trim, audio-bearing60fps export, cancellation and motion/model checks.
 - Existing area-to-saved-video dimensions1402×1214 were verified before this boundary change; not a new live outline verification.
 - User began another recording during native verification. Did not quit/relaunch it. New bundle is ready, but live border alignment, click-through, focus/Spaces behavior, stop removal and absence from a real exported capture remain to be confirmed after relaunch. Native coordinate automation still fails noWindowsAvailable.
+
+## Revision: outside-area dimming (November5)
+
+User reports thin indicator does not remain visible while recording and prefers a black overlay on excluded pixels. Replaced strips with nonoverlapping black38%-opacity mask windows covering only the selected display outside the crop. The captured rectangle has no overlay window, tint, border or colored recording state. Full-display/full-window capture gets no custom masks. Area covering the entire display has no excluded region to dim.
+
+Found a possible lifecycle cause: native picker callbacks could call applySource after stream creation, clearing selectedArea and hiding the indicator. Picker update/cancel/error and applySource now reject mutations while stream/recording/busy is active. Capture also freezes activeArea at start, uses it to restore the mask, and prevents idle UI dismissal from hiding it during a stream. First-frame callback ignores a session already stopping. This closes a real reset path; it does not prove that path caused every user-observed disappearance.
+
+Release build and full media checks pass. New tests verify masks are disjoint, inside the display, exclude the recording area and cover exactly the excluded display area, including negative/offset displays and edge/full-display cases. Previous white/orange description above is historical and superseded. App was returned Home to preserve current edit, relaunched safely, and opened on New Recording for user test. Live dimming persistence and output exclusion remain pending user test.
