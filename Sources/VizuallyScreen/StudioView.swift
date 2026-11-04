@@ -157,13 +157,37 @@ struct RecordingSheet: View {
                     Button("Select area…") { capture.chooseArea() }.buttonStyle(StudioButtonStyle()).disabled(!capture.supportsArea).help("Drag an area of one display. Requires macOS 15.2 or later.").feedbackTarget("recording.area","Select recording area")
                 }.disabled(capture.picking || capture.busy)
             }.frame(maxWidth:.infinity,alignment:.leading).padding(18).background(Ink.soft,in:RoundedRectangle(cornerRadius:10))
+            if let area=capture.areaPreview {
+                VStack(alignment:.leading,spacing:10) {
+                    HStack {
+                        Text("Recording area").font(Geist.font(12,.medium))
+                        Spacer()
+                        Text(area.dimensions).font(Geist.font(12,.medium)).monospacedDigit()
+                        InfoHint(title:"Area authorization",text:"macOS authorizes a display and calls its button Share Screen. Vizually Screen crops the stream to the rectangle shown here. Only that area is saved. The rest of the display is not saved in the video.")
+                    }
+                    GeometryReader { geometry in
+                        let scale=min(geometry.size.width/area.displaySize.width,geometry.size.height/area.displaySize.height)
+                        let size=CGSize(width:area.displaySize.width*scale,height:area.displaySize.height*scale)
+                        ZStack(alignment:.topLeading) {
+                            RoundedRectangle(cornerRadius:4).fill(Ink.line)
+                            Rectangle().fill(theme.accent.opacity(0.18)).overlay(Rectangle().stroke(theme.accent,lineWidth:2))
+                                .frame(width:area.rect.width*scale,height:area.rect.height*scale)
+                                .offset(x:area.rect.minX*scale,y:area.rect.minY*scale)
+                        }.frame(width:size.width,height:size.height).frame(maxWidth:.infinity,maxHeight:.infinity)
+                    }.frame(height:100).accessibilityLabel("Only the highlighted rectangle will be recorded, \(area.dimensions)")
+                    if capture.areaNeedsAuthorization {
+                        Button("Authorize display…",action:capture.authorizeArea).buttonStyle(StudioButtonStyle()).disabled(capture.picking)
+                        Text("macOS calls this Share Screen. Your recording stays cropped to the highlighted area.").font(Geist.font(11)).foregroundStyle(Ink.secondary).fixedSize(horizontal:false,vertical:true)
+                    }
+                }.padding(14).background(Ink.soft,in:RoundedRectangle(cornerRadius:10))
+            }
             QualityPicker(selection:$capture.quality,recording:true).feedbackTarget("recording.quality","Recording quality")
             HStack { Toggle("Smooth pointer",isOn:$capture.smoothCursor).toggleStyle(.switch).tint(theme.accent).disabled(!capture.supportsSmoothPointer).feedbackTarget("recording.pointer","Smooth pointer");InfoHint(title:"Smooth pointer",text:"Records movement separately and renders a smooth arrow. Turn off to keep original cursor shapes, such as text selection and resize. Requires macOS 15.2 or later.") }
             HStack { Toggle("Automatic zoom",isOn:$capture.automaticZoom).toggleStyle(.switch).tint(theme.accent).disabled(!capture.smoothCursor).feedbackTarget("recording.zoom","Automatic zoom");InfoHint(title:"Automatic zoom",text:"Adds editable zooms where your pointer settles after moving. Requires Smooth pointer. You can adjust or remove each zoom in the editor.") }
             Toggle("Include system audio", isOn: $capture.systemAudio).toggleStyle(.switch).tint(theme.accent).feedbackTarget("recording.audio","System audio")
             HStack { Text("Saved to Movies/Vizually Screen").font(Geist.font(12)).foregroundStyle(Ink.secondary);InfoHint(title:"Saved recordings",text:"The original video and its pointer data are saved together in Movies/Vizually Screen. Stop recording from the app or menu bar.") }
             if let error = capture.error { Text(error).font(Geist.font(12)).foregroundStyle(.red).textSelection(.enabled) }
-            HStack { Spacer(); Button("Cancel") { dismiss() }.buttonStyle(StudioButtonStyle()); Button("Start recording") { Task { await capture.start(); if capture.error == nil { dismiss() } } }.buttonStyle(StudioButtonStyle(primary: true)).disabled(!capture.hasSource || capture.busy || capture.picking).feedbackTarget("recording.start","Start recording") }
+            HStack { Spacer(); Button("Cancel") { dismiss() }.buttonStyle(StudioButtonStyle()); Button("Start recording") { Task { await capture.start(); if capture.error == nil { dismiss() } } }.buttonStyle(StudioButtonStyle(primary: true)).disabled(!capture.hasSource || capture.busy || capture.picking || capture.areaNeedsAuthorization).feedbackTarget("recording.start","Start recording") }
         }.padding(28).frame(width: 450).foregroundStyle(Ink.primary).background(.white)
             .task { await capture.prepareDefaultSource() }
     }

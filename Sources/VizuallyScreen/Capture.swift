@@ -26,7 +26,15 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     private var filter: SCContentFilter?
     private var selectedArea:CGRect?
     @Published var selectionStatus:String?
-    private var pendingArea:(displayID:CGDirectDisplayID,rect:CGRect)?
+    @Published private var pendingArea:(displayID:CGDirectDisplayID,rect:CGRect)?
+    @Published var areaPreview:AreaPreview?
+    var areaNeedsAuthorization:Bool { pendingArea != nil }
+    struct AreaPreview {
+        let rect:CGRect
+        let displaySize:CGSize
+        let pixelScale:Double
+        var dimensions:String { "\(Int((rect.width*pixelScale).rounded())) × \(Int((rect.height*pixelScale).rounded())) px" }
+    }
     private let areaSelector=AreaSelector()
     var supportsArea:Bool { if #available(macOS 15.2,*) { return true };return false }
     func chooseArea() {
@@ -40,32 +48,40 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
             }
             let id=number.uint32Value
             self.pendingArea=(id,rect)
+            self.areaPreview=AreaPreview(rect:rect,displaySize:screen.frame.size,pixelScale:screen.backingScaleFactor)
             if #available(macOS 15.2,*),let filter=self.filter,filter.style == .display,filter.includedDisplays.first?.displayID == id {
                 self.acceptAreaSource(filter);return
             }
-            self.selectionStatus="Area selected. Share this display in the macOS picker to continue."
-            Task { @MainActor in
-                // Existing permission may allow authorizing the exact chosen display without another picker.
-                if CGPreflightScreenCaptureAccess(),
-                   let content=try? await SCShareableContent.excludingDesktopWindows(false,onScreenWindowsOnly:true),
-                   let display=content.displays.first(where: { $0.displayID == id }),
-                   self.pendingArea?.displayID == id {
-                    let filter=SCContentFilter(display:display,excludingApplications:content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier },exceptingWindows:[])
-                    self.acceptAreaSource(filter)
-                } else if self.pendingArea != nil { self.chooseSource(area:true) }
-            }
+            self.picking=false
+            self.selectionStatus="Area selected · Display authorization needed"
         }
     }
+    func authorizeArea() {
+        guard let pendingArea,!picking,!busy,!recording else { return }
+        let id=pendingArea.displayID
+        picking=true;selectionStatus="In macOS, choose Share Screen for this display. Only your selected area will be recorded."
+        Task { @MainActor in
+            if CGPreflightScreenCaptureAccess(),
+               let content=try? await SCShareableContent.excludingDesktopWindows(false,onScreenWindowsOnly:true),
+               let display=content.displays.first(where: { $0.displayID == id }),
+               self.pendingArea?.displayID == id {
+                let filter=SCContentFilter(display:display,excludingApplications:content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier },exceptingWindows:[])
+                self.acceptAreaSource(filter)
+            } else if self.pendingArea != nil { self.chooseSource(area:true) }
+        }
+    }
+
     private func acceptAreaSource(_ candidate:SCContentFilter) {
         guard #available(macOS 15.2,*),let pendingArea,
               candidate.style == .display,candidate.includedDisplays.first?.displayID == pendingArea.displayID else {
-            self.pendingArea=nil;picking=false;selectionStatus=nil
+            picking=false;selectionStatus="Area selected · Choose the matching display to continue."
             error="The shared display does not match your selected area. Choose the area again and share that display.";return
         }
         let rect=pendingArea.rect
         self.pendingArea=nil
         applySource(candidate)
         selectedArea=rect
+        areaPreview=AreaPreview(rect:rect,displaySize:sourceBounds(candidate).size,pixelScale:Double(candidate.pointPixelScale))
         let size=VideoQuality.nativeSize(points:rect.size,scale:Double(candidate.pointPixelScale))
         sourceSummary="Selected area · \(size.0) × \(size.1)"
     }
@@ -86,7 +102,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     func chooseSource(area:Bool=false) {
         guard !recording,!busy else { return }
         error=nil;picking=true
-        if !area { pendingArea=nil;selectionStatus="Choose a screen or window in the macOS picker." }
+        if !area { pendingArea=nil;areaPreview=nil;selectionStatus="Choose a screen or window in the macOS picker." }
         let picker=SCContentSharingPicker.shared
         var config=SCContentSharingPickerConfiguration()
         config.allowedPickerModes=area ? [.singleDisplay]:[.singleDisplay,.singleWindow]
@@ -97,10 +113,10 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     func prepareDefaultSource() async {
         // Use an already-authorized sole display without adding another choice.
         // Never request broad permission merely to skip the system picker.
-        guard !hasSource,!picking,!busy,!recording,NSScreen.screens.count == 1,CGPreflightScreenCaptureAccess() else { return }
+        guard pendingArea == nil,!hasSource,!picking,!busy,!recording,NSScreen.screens.count == 1,CGPreflightScreenCaptureAccess() else { return }
         guard let content=try? await SCShareableContent.excludingDesktopWindows(false,onScreenWindowsOnly:true),
               content.displays.count == 1,let display=content.displays.first,
-              !hasSource,!picking,!busy,!recording else { return }
+              pendingArea == nil,!hasSource,!picking,!busy,!recording else { return }
         let selected=SCContentFilter(display:display,excludingApplications:content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier },exceptingWindows:[])
         applySource(selected)
     }
@@ -112,7 +128,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
         return filter.contentRect
     }
     private func applySource(_ filter:SCContentFilter) {
-        self.filter=filter;selectedArea=nil;hasSource=true;picking=false;selectionStatus=nil;error=nil
+        self.filter=filter;selectedArea=nil;areaPreview=nil;hasSource=true;picking=false;selectionStatus=nil;error=nil
         let size=VideoQuality.nativeSize(points:sourceBounds(filter).size,scale:Double(filter.pointPixelScale))
         let name:String
         if #available(macOS 15.2,*),filter.style == .window { name=filter.includedWindows.first?.title ?? "Selected window" }
@@ -121,6 +137,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     }
     func start() async {
         guard !busy,!recording else { return }
+        guard pendingArea == nil else { error="Authorize the selected area before recording.";return }
         guard let filter else { chooseSource();return }
         busy=true;error=nil
         let session=UUID();sessionID=session
@@ -180,12 +197,12 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
             cleanup();onFinish?(result)
         } catch { fail(error) }
     }
-    private func cleanup() { sessionID=UUID();recordingTimer?.invalidate();recordingTimer=nil;began=nil;cursorTimer?.invalidate();cursorTimer=nil;stream=nil;output=nil;recording=false;busy=false;stopping=false;filter=nil;selectedArea=nil;pendingArea=nil;selectionStatus=nil;areaSelector.cancel();hasSource=false;sourceSummary="Choose a source for the next recording";SCContentSharingPicker.shared.isActive=false }
+    private func cleanup() { sessionID=UUID();recordingTimer?.invalidate();recordingTimer=nil;began=nil;cursorTimer?.invalidate();cursorTimer=nil;stream=nil;output=nil;recording=false;busy=false;stopping=false;filter=nil;selectedArea=nil;pendingArea=nil;areaPreview=nil;selectionStatus=nil;areaSelector.cancel();hasSource=false;sourceSummary="Choose a source for the next recording";SCContentSharingPicker.shared.isActive=false }
     private func fail(_ error: Error) {
         output?.cancel();self.error="\(error.localizedDescription)\n\((error as NSError).domain) (\((error as NSError).code)). Select the source again with the macOS picker. If macOS still refuses, quit Vizually Screen and re-enable this build in Screen & System Audio Recording."
         cleanup()
     }
-    nonisolated func contentSharingPicker(_ picker:SCContentSharingPicker,didCancelFor stream:SCStream?) { Task { @MainActor in self.picking=false;self.pendingArea=nil;self.selectionStatus=nil } }
+    nonisolated func contentSharingPicker(_ picker:SCContentSharingPicker,didCancelFor stream:SCStream?) { Task { @MainActor in self.picking=false;self.selectionStatus=self.pendingArea == nil ? nil:"Area selected · Authorization cancelled. Try again." } }
     nonisolated func contentSharingPicker(_ picker:SCContentSharingPicker,didUpdateWith filter:SCContentFilter,for stream:SCStream?) {
         Task { @MainActor in
             if self.pendingArea != nil { self.acceptAreaSource(filter) } else { self.applySource(filter) }
