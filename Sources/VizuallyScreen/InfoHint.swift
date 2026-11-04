@@ -35,10 +35,11 @@ struct InfoHint: View {
 }
 struct QualityPicker: View {
     @Binding var selection: VideoQuality
+    var recording=false
     var body: some View {
         HStack(spacing:StudioLayout.helpGap) {
             Text("Quality").font(StudioType.controlLabel)
-            InfoHint(title:"Quality",text:selection.detail)
+            InfoHint(title:recording ? "Recording quality":"Export quality",text:selection.detail + (recording ? " For small text you plan to zoom into, Maximum detail keeps more color detail in the original recording. It uses much more disk space. A later high-quality export cannot repair a compressed original.":" Export quality cannot recover detail missing from the original recording."))
             Spacer()
             Picker("Quality",selection:$selection) { ForEach(VideoQuality.allCases) { quality in Text(quality.name).tag(quality) } }
                 .labelsHidden().fixedSize()

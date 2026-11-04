@@ -1,0 +1,62 @@
+[
+  {
+    "actualBitrateMbps" : 22.797619999999998,
+    "codec" : "hvc1",
+    "duration" : 2,
+    "firstPTS" : 0,
+    "fps" : 60,
+    "frames" : 120,
+    "height" : 1080,
+    "lastPTS" : 1.9833333333333334,
+    "maxFrameGapMs" : 16.666666666666828,
+    "profile" : "zoom-efficient",
+    "rgbPSNR" : 23.416402087394367,
+    "textROI_PSNR" : 27.132610811947092,
+    "width" : 1920
+  },
+  {
+    "actualBitrateMbps" : 497.15923199999997,
+    "codec" : "ap4h",
+    "duration" : 2,
+    "firstPTS" : 0,
+    "fps" : 60,
+    "frames" : 120,
+    "height" : 1080,
+    "lastPTS" : 1.9833333333333334,
+    "maxFrameGapMs" : 16.666666666666828,
+    "profile" : "zoom-master",
+    "rgbPSNR" : 28.762097955088368,
+    "textROI_PSNR" : 31.32175446539231,
+    "width" : 1920
+  },
+  {
+    "actualBitrateMbps" : 22.878988,
+    "codec" : "hvc1",
+    "duration" : 2,
+    "firstPTS" : 0,
+    "fps" : 60,
+    "frames" : 120,
+    "height" : 1080,
+    "lastPTS" : 1.9833333333333334,
+    "maxFrameGapMs" : 16.666666666666828,
+    "profile" : "zoom-master-to-efficient",
+    "rgbPSNR" : 28.532469578689867,
+    "textROI_PSNR" : 30.429670728067656,
+    "width" : 1920
+  },
+  {
+    "actualBitrateMbps" : 463.439232,
+    "codec" : "ap4h",
+    "duration" : 2,
+    "firstPTS" : 0,
+    "fps" : 60,
+    "frames" : 120,
+    "height" : 1080,
+    "lastPTS" : 1.9833333333333334,
+    "maxFrameGapMs" : 16.666666666666828,
+    "profile" : "zoom-efficient-to-master",
+    "rgbPSNR" : 23.455808112630685,
+    "textROI_PSNR" : 27.60915279771606,
+    "width" : 1920
+  }
+]

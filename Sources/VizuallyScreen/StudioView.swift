@@ -157,7 +157,7 @@ struct RecordingSheet: View {
                     Button("Select area…") { capture.chooseArea() }.buttonStyle(StudioButtonStyle()).disabled(!capture.supportsArea).help("Drag an area of one display. Requires macOS 15.2 or later.").feedbackTarget("recording.area","Select recording area")
                 }.disabled(capture.picking || capture.busy)
             }.frame(maxWidth:.infinity,alignment:.leading).padding(18).background(Ink.soft,in:RoundedRectangle(cornerRadius:10))
-            QualityPicker(selection:$capture.quality).feedbackTarget("recording.quality","Recording quality")
+            QualityPicker(selection:$capture.quality,recording:true).feedbackTarget("recording.quality","Recording quality")
             HStack { Toggle("Smooth pointer",isOn:$capture.smoothCursor).toggleStyle(.switch).tint(theme.accent).disabled(!capture.supportsSmoothPointer).feedbackTarget("recording.pointer","Smooth pointer");InfoHint(title:"Smooth pointer",text:"Records movement separately and renders a smooth arrow. Turn off to keep original cursor shapes, such as text selection and resize. Requires macOS 15.2 or later.") }
             HStack { Toggle("Automatic zoom",isOn:$capture.automaticZoom).toggleStyle(.switch).tint(theme.accent).disabled(!capture.smoothCursor).feedbackTarget("recording.zoom","Automatic zoom");InfoHint(title:"Automatic zoom",text:"Adds editable zooms where your pointer settles after moving. Requires Smooth pointer. You can adjust or remove each zoom in the editor.") }
             Toggle("Include system audio", isOn: $capture.systemAudio).toggleStyle(.switch).tint(theme.accent).feedbackTarget("recording.audio","System audio")

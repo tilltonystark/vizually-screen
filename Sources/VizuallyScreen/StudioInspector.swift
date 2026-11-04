@@ -87,7 +87,7 @@ struct StudioInspector: View {
         }
         if let p = editor.project, let z = p.zooms.first(where: { $0.id == editor.selectedZoomID }) {
             Rule()
-            HStack { Text(z.automatic == true ? "Automatic zoom":"Selected zoom").font(Geist.font(13, .semibold)); Spacer(); IconButton(symbol: "trash", title: "Delete selected zoom", action: editor.deleteSelectedZoom) }
+            HStack { Text(z.automatic == true ? "Automatic zoom":"Selected zoom").font(Geist.font(13, .semibold)); InfoHint(title:"Zoom detail",text:"Zoom enlarges the original pixels. Stronger magnification also enlarges compression artifacts. For future recordings with small text, choose Maximum detail before recording; it uses much more disk space. Lower magnification can keep existing recordings clearer."); Spacer(); IconButton(symbol: "trash", title: "Delete selected zoom", action: editor.deleteSelectedZoom) }
             FocusPad(x: zoomBinding(z, \.x), y: zoomBinding(z, \.y), image: editor.thumbnails.first).environmentObject(theme)
             parameter("Magnification", value: zoomBinding(z, \.scale), range: 1...4, suffix: "×", decimals: 1)
             parameter("Start", value: zoomBinding(z, \.start), range: 0...max(0, editor.duration - z.duration), suffix: "s", decimals: 2)

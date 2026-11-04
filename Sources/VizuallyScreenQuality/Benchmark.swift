@@ -26,6 +26,32 @@ import UniformTypeIdentifiers
         if !FileManager.default.fileExists(atPath:source.path) { try await makeSource(source) }
         let asset=AVURLAsset(url:source)
         var p=Project(sourcePath:source.path,trimEnd:2);p.padding=0
+        if CommandLine.arguments.contains("--zoom-detail") {
+            var zoomed=p
+            zoomed.zooms=[Zoom(start:0,duration:2,scale:1.65,x:0.25,y:0.3)]
+            var results:[[String:Any]]=[]
+            for quality in [VideoQuality.efficient,.master] {
+                let capture=directory.appendingPathComponent("capture-\(quality.rawValue).\(quality.fileExtension)")
+                let output=directory.appendingPathComponent("zoom-\(quality.rawValue).\(quality.fileExtension)")
+                for url in [capture,output] { if FileManager.default.fileExists(atPath:url.path) { try FileManager.default.removeItem(at:url) } }
+                try await MediaExporter.export(asset:asset,project:p,quality:quality,to:capture)
+                let captured=AVURLAsset(url:capture)
+                try await MediaExporter.export(asset:captured,project:zoomed,quality:quality,to:output)
+                let result=try await measure(reference:asset,candidate:AVURLAsset(url:output),name:"zoom-\(quality.rawValue)",directory:directory,referenceProject:zoomed)
+                results.append(result);print(result)
+            }
+            for (sourceQuality,exportQuality) in [(VideoQuality.master,VideoQuality.efficient),(.efficient,.master)] {
+                let captured=AVURLAsset(url:directory.appendingPathComponent("capture-\(sourceQuality.rawValue).\(sourceQuality.fileExtension)"))
+                let name="zoom-\(sourceQuality.rawValue)-to-\(exportQuality.rawValue)"
+                let output=directory.appendingPathComponent("\(name).\(exportQuality.fileExtension)")
+                if FileManager.default.fileExists(atPath:output.path) { try FileManager.default.removeItem(at:output) }
+                try await MediaExporter.export(asset:captured,project:zoomed,quality:exportQuality,to:output)
+                let result=try await measure(reference:asset,candidate:AVURLAsset(url:output),name:name,directory:directory,referenceProject:zoomed)
+                results.append(result);print(result)
+            }
+            try JSONSerialization.data(withJSONObject:results,options:[.prettyPrinted,.sortedKeys]).write(to:directory.appendingPathComponent("zoom-detail-report.json"))
+            return
+        }
         var reports: [[String:Any]]=[]
         let motionOnly=CommandLine.arguments.contains("--motion-only")
         for name in motionOnly ? []:["legacy-preset","high","efficient","master"] {
@@ -115,8 +141,9 @@ import UniformTypeIdentifiers
         }
         return data
     }
-    static func measure(reference:AVAsset,candidate:AVAsset,name:String,directory:URL) async throws -> [String:Any] {
+    static func measure(reference:AVAsset,candidate:AVAsset,name:String,directory:URL,referenceProject:Project?=nil) async throws -> [String:Any] {
         let a=AVAssetImageGenerator(asset:reference),b=AVAssetImageGenerator(asset:candidate)
+        if let referenceProject { a.videoComposition=Renderer.composition(asset:reference,project:referenceProject) }
         a.requestedTimeToleranceBefore = .zero;a.requestedTimeToleranceAfter = .zero;b.requestedTimeToleranceBefore = .zero;b.requestedTimeToleranceAfter = .zero
         var error=0.0,textError=0.0,count=0,textCount=0
         for (index,t) in [0.25,0.75,1.25,1.75].enumerated() {
