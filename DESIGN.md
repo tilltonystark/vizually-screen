@@ -37,3 +37,11 @@ Inspector: Canvas/Zoom tabs → grouped source-preserving controls. No source di
 The existing studio predates strict layout/type token layers and still has raw spacing/font calls. This checkpoint adds semantic tokens for shared help, not a claim that the whole app is token-clean. New header/home/background work must reuse these components and document additional roles here. Do not silently invent variants.
 
 Pointer motion controls use Recorded, Smooth, Extra smooth; these change the separately rendered arrow only. Auto focus refreshes generated suggestions, never manual regions. Editing a generated region promotes it to manual. No click or gaze inference is implied by “focus.”
+
+BackgroundPicker: Gradient/Color/Image categories (native segmented picker with hidden external label), 4-column swatches; None is the zero-padding action. Eight gradients come from BackgroundPreset; legacy palettes remain readable only. Images use aspect fill and clamp edge pixels. WallpaperPicker displays installed local image assets; no remote downloads or bundled Apple assets. Header uses StudioLayout.headerHeight/headerLeading, native unified traffic lights, consistent 40pt actions and no dropdown chevron on the ellipsis menu.
+
+## Home and feedback
+
+Home uses the shared 56pt header, 190pt library rail, 32pt content inset, adaptive recording cards and native source thumbnails. No destructive library actions. Missing originals stay visible as unavailable.
+
+Feedback is a test-environment layer: a small comment icon toggles selection; hovering outlines the smallest instrumented SwiftUI target; a click opens a 320pt draft beside the pin. Content actions are intercepted while selecting. Escape exits. Saved pins are target-relative, local comments survive a disconnected agent, and delivery state distinguishes saved versus sent. The feedback list is separate from customer-facing shared video comments.

@@ -1,7 +1,7 @@
 import Foundation
 import AVFoundation
 import CoreText
-import FramecraftCore
+import VizuallyScreenCore
 import ImageIO
 import UniformTypeIdentifiers
 
@@ -20,7 +20,7 @@ import UniformTypeIdentifiers
             print(String(data:try JSONSerialization.data(withJSONObject:report,options:[.prettyPrinted,.sortedKeys]),encoding:.utf8)!)
             return
         }
-        let directory=URL(fileURLWithPath:CommandLine.arguments.dropFirst().first ?? "/tmp/framecraft-quality")
+        let directory=URL(fileURLWithPath:CommandLine.arguments.dropFirst().first ?? "/tmp/vizually-screen-quality")
         try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
         let source=directory.appendingPathComponent("reference.mov")
         if !FileManager.default.fileExists(atPath:source.path) { try await makeSource(source) }
@@ -74,7 +74,7 @@ import UniformTypeIdentifiers
             c.saveGState();c.translateBy(x:x,y:y+size);c.scaleBy(x:1,y:-1);c.textPosition = .zero;c.textMatrix = .identity;CTLineDraw(CTLineCreateWithAttributedString(string),c);c.restoreGState()
         }
         let ink=CGColor(gray:0.08,alpha:1),red=CGColor(red:0.85,green:0.08,blue:0.10,alpha:1),blue=CGColor(red:0.04,green:0.18,blue:0.9,alpha:1)
-        text("Framecraft screen-detail calibration · 1920 × 1080 · 60 fps",40,24,24,ink)
+        text("VizuallyScreen screen-detail calibration · 1920 × 1080 · 60 fps",40,24,24,ink)
         for row in 0..<24 {
             let size=CGFloat([10,12,14,16][row%4]), y=80+CGFloat(row)*24
             text("AaBb 0123456789 · fine text should stay readable · const pixel = 1;",40,y,size,row%3==0 ? red:row%3==1 ? blue:ink)

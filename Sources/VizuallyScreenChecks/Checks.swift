@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
-import FramecraftCore
+import CoreImage
+import VizuallyScreenCore
 
 func XCTAssertTrue(_ value: Bool, file: StaticString = #file, line: UInt = #line) { precondition(value, "Check failed at line \(line)", file: file, line: line) }
 func XCTAssertEqual<T: Equatable>(_ lhs: T, _ rhs: T) { precondition(lhs == rhs, "Expected \(lhs) == \(rhs)") }
@@ -8,19 +9,40 @@ func XCTAssertEqual(_ lhs: Double, _ rhs: Double, accuracy: Double) { preconditi
 func XCTAssertGreaterThan(_ lhs: Int, _ rhs: Int) { precondition(lhs > rhs) }
 func XCTAssertThrowsError(_ action: @autoclosure () throws -> Void) { do { try action(); fatalError("Expected validation to throw") } catch {} }
 @main
-struct FramecraftChecks {
+struct VizuallyScreenChecks {
     static func main() async throws {
-        let checks = FramecraftChecks()
+        let checks = VizuallyScreenChecks()
         checks.testZoomIsContinuousAndReturnsToOriginal()
         try checks.testProjectRoundtripAndValidation()
         try checks.testShortClipAndTrimIntervals()
         try checks.testAppearanceRoundtripAndContrast()
         checks.testMotionAndNativePixels()
         try checks.testAutomaticFocusAndMotion()
+        try checks.testCanvasBackgrounds()
+        try checks.testRecordingCatalog()
         try await checks.testCaptureContentBounds()
         try await checks.testDemoClip()
         try await checks.testActualVideoExport()
         print("PASS: continuous camera/cursor motion, native pixel sizing and padded-frame crop encode/decode, short-clip/trim bounds, model/theme roundtrips and contrast, demo decode, 60 fps trimmed export with audio, cancellation cleanup")
+    }
+    func testRecordingCatalog() throws {
+        let root=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)
+        defer { try? FileManager.default.removeItem(at:root) }
+        let source=root.appendingPathComponent("test.mov")
+        try Data([0]).write(to:source)
+        var project=Project(sourcePath:source.path,trimEnd:8)
+        project.zooms=[Zoom(start:1)]
+        let edit=root.appendingPathComponent("custom-edit.vizually.json")
+        try JSONEncoder().encode(project).write(to:edit)
+        let missing=RecordingReference(sourcePath:"/missing/recording.mov",updated:.distantFuture)
+        let found=RecordingCatalog.scan(roots:[root],recent:[missing,missing])
+        XCTAssertEqual(found.count,2)
+        XCTAssertEqual(found[0].sourcePath,missing.sourcePath)
+        XCTAssertEqual(found[1].projectPath,edit.resolvingSymlinksInPath().path)
+        let restored=try JSONDecoder().decode(Project.self,from:Data(contentsOf:URL(fileURLWithPath:found[1].projectPath!)))
+        XCTAssertEqual(restored.zooms,project.zooms)
+        XCTAssertEqual(RecordingCatalog.scan(roots:[root.appendingPathComponent("absent")],recent:[]).count,0)
     }
     func testZoomIsContinuousAndReturnsToOriginal() {
         let z = Zoom(start: 2, duration: 3)
@@ -156,6 +178,32 @@ struct FramecraftChecks {
         p.pointerSmoothing = .original;state.update(p)
         XCTAssertEqual(state.project.cursorSamples,samples)
     }
+    func testCanvasBackgrounds() throws {
+        let rect=CGRect(x:0,y:0,width:320,height:180)
+        let context=CIContext()
+        for preset in BackgroundPreset.all {
+            let background=CanvasBackground(kind:.gradient,value:preset.id)
+            XCTAssertTrue(background.isValid)
+            XCTAssertEqual(background.render(in:rect,image:nil).extent,rect)
+        }
+        XCTAssertTrue(!CanvasBackground(kind:.solid,value:"invalid").isValid)
+        var p=Project(sourcePath:"/tmp/source.mp4",trimEnd:1)
+        p.canvasBackground=CanvasBackground(kind:.solid,value:"22AA55")
+        let copy=try JSONDecoder().decode(Project.self,from:JSONEncoder().encode(p))
+        XCTAssertEqual(copy.canvasBackground,p.canvasBackground)
+        let path=FileManager.default.temporaryDirectory.appendingPathComponent("background-check-\(UUID().uuidString).png")
+        defer { try? FileManager.default.removeItem(at:path) }
+        try context.writePNGRepresentation(of:CIImage(color:CIColor(red:0.1,green:0.2,blue:0.9)).cropped(to:CGRect(x:0,y:0,width:80,height:50)),to:path,format:.RGBA8,colorSpace:CGColorSpace(name:CGColorSpace.sRGB)!)
+        let background=CanvasBackground(kind:.image,value:path.path)
+        XCTAssertTrue(background.isValid)
+        let image=background.render(in:rect,image:CanvasBackground.loadImage(path.path))
+        XCTAssertEqual(image.extent,rect)
+        var pixels=[UInt8](repeating:0,count:320*180*4)
+        pixels.withUnsafeMutableBytes { context.render(image,toBitmap:$0.baseAddress!,rowBytes:1280,bounds:rect,format:.RGBA8,colorSpace:CGColorSpace(name:CGColorSpace.sRGB)) }
+        XCTAssertTrue(pixels[2]>180 && pixels[2]>pixels[0])
+        let video=URL(fileURLWithPath:"/tmp/recording.mp4")
+        XCTAssertEqual(ProjectFiles.candidates(for:video).map(\.lastPathComponent),["recording.vizually.json","recording.framecraft.json"])
+    }
     func testCaptureContentBounds() async throws {
         let geometry=CaptureFrameGeometry(surfaceSize:CGSize(width:640,height:480),contentRectPoints:CGRect(x:20,y:10,width:160,height:100),pixelScale:2,contentScale:1)
         XCTAssertEqual(geometry.contentRect,CGRect(x:40,y:20,width:320,height:200))
@@ -265,6 +313,7 @@ struct FramecraftChecks {
         try asset.addMutableTrack(withMediaType:.audio,preferredTrackID:kCMPersistentTrackID_Invalid)!.insertTimeRange(CMTimeRange(start:.zero,duration:CMTime(seconds:2,preferredTimescale:600)),of:audioTrack,at:.zero)
         var p = Project(sourcePath: inputURL.path, trimStart: 0.25, trimEnd: 1.75)
         p.zooms = [Zoom(start: 0.3, duration: 1.2, scale: 2, x: 0.8, y: 0.2)]
+        p.padding=0.1;p.canvasBackground=CanvasBackground(kind:.solid,value:"22AA55")
         try await Renderer.export(asset: asset, project: p, to: outputURL)
         let rendered = AVURLAsset(url: outputURL)
         let duration = try await rendered.load(.duration).seconds
@@ -281,6 +330,11 @@ struct FramecraftChecks {
         let image = try await generator.image(at: CMTime(seconds: 0.5, preferredTimescale: 600)).image
         XCTAssertEqual(image.width, 320)
         XCTAssertEqual(image.height, 180)
+        var rgba=[UInt8](repeating:0,count:320*180*4)
+        rgba.withUnsafeMutableBytes { storage in
+            CIContext().render(CIImage(cgImage:image),toBitmap:storage.baseAddress!,rowBytes:1280,bounds:CGRect(x:0,y:0,width:320,height:180),format:.RGBA8,colorSpace:CGColorSpace(name:CGColorSpace.sRGB))
+        }
+        for (x,y) in [(3,3),(316,3),(3,176),(316,176)] { let i=(y*320+x)*4;XCTAssertTrue(rgba[i+1]>rgba[i]+40 && rgba[i+1]>rgba[i+2]+30) }
         // Verify export produced more than a container header.
         XCTAssertGreaterThan(try Data(contentsOf: outputURL).count, 1000)
     }

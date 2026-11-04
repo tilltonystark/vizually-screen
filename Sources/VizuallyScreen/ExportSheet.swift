@@ -1,5 +1,5 @@
 import SwiftUI
-import FramecraftCore
+import VizuallyScreenCore
 
 struct ExportSheet: View {
     @ObservedObject var editor: Editor

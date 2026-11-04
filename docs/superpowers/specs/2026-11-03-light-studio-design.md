@@ -1,4 +1,4 @@
-# Framecraft light studio
+# Vizually Screen light studio
 
 User requirements: native macOS; a materially more polished editor; light mode; Geist; antialiased text; apply build-a-tool, color, ui-polish and Superpowers; establish access needed for real Screen Studio comparison. Existing recording/export functionality must remain available.
 

@@ -12,4 +12,6 @@ CURRENT MILESTONE 2 STEPS:
 3. Render smooth cursor/camera transitions in preview/export → real motion sample.
 4. Verify math, decode cadence and UI behavior → documented checkpoint and pushed commit.
 CHECKS: Each milestone has evidence before a completion claim. Preserve existing manual zooms when applying suggestions unless explicitly replaced. No invented click data. Old baked cursors cannot be removed.
-ASSUMPTIONS: Automatic focus follows pointer dwell and deliberate movement, not inferred eye gaze or clicks. Background import is local. Existing Framecraft recordings remain discoverable after rename.
+ASSUMPTIONS: Automatic focus follows pointer dwell and deliberate movement, not inferred eye gaze or clicks. Background import is local. Existing Vizually Screen recordings remain discoverable after rename.
+
+ADDITIONAL USER REQUEST (2026-11-04): After the home/library checkpoint, add native in-app feedback mode. Hover highlights instrumented SwiftUI controls; clicking pins a local comment with stable element ID, source-file/line, viewport and playback context. Include a local feedback list and copy/export context. No DOM exists in a native SwiftUI app. No third-party transmission is requested; comments stay in Application Support and out of Git. Push this checkpoint too.

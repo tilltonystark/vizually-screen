@@ -49,7 +49,7 @@ package final class CaptureFrameProcessor {
         let crop=CGRect(x:geometry.contentRect.minX,y:sourceSize.height-geometry.contentRect.maxY,width:geometry.contentRect.width,height:geometry.contentRect.height)
         var image=CIImage(cvPixelBuffer:buffer).cropped(to:crop).transformed(by:CGAffineTransform(translationX:-crop.minX,y:-crop.minY))
         let scale=min(size.width/crop.width,size.height/crop.height)
-        if abs(scale-1)>0.000001 { image=image.applyingFilter("CILanczosScaleTransform",parameters:[kCIInputScaleKey:scale,kCIInputAspectRatioKey:1]) }
+        if abs(scale-1)>0.000001 { image=image.clampedToExtent().applyingFilter("CILanczosScaleTransform",parameters:[kCIInputScaleKey:scale,kCIInputAspectRatioKey:1]) }
         image=image.transformed(by:CGAffineTransform(translationX:(size.width-crop.width*scale)/2,y:(size.height-crop.height*scale)/2))
         let bounds=CGRect(origin:.zero,size:size)
         image=image.composited(over:CIImage(color:.black).cropped(to:bounds))

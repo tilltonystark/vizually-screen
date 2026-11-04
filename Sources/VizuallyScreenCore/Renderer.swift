@@ -6,16 +6,23 @@ package final class RenderState: @unchecked Sendable {
     private let lock=NSLock()
     private var value: Project
     private var smoothing:PointerSmoothing
+    private var backgroundImage:CIImage?
+    private var backgroundPath:String?
     package init(_ project:Project) {
         value=project;smoothing=project.pointerSmoothing ?? .smooth
         value.cursorSamples=project.cursorSamples.map { Motion.smooth($0,sigma:smoothing.sigma) }
+        backgroundPath=project.canvasBackground?.kind == .image ? project.canvasBackground?.value:nil
+        backgroundImage=backgroundPath.flatMap(CanvasBackground.loadImage)
     }
     package var project:Project { lock.lock();defer{lock.unlock()};return value }
+    package var snapshot:(Project,CIImage?) { lock.lock();defer{lock.unlock()};return (value,backgroundImage) }
     package func update(_ project:Project) {
         lock.lock();defer { lock.unlock() }
         let setting=project.pointerSmoothing ?? .smooth
         let samples=setting == smoothing && project.cursorSamples?.count == value.cursorSamples?.count ? value.cursorSamples:project.cursorSamples.map { Motion.smooth($0,sigma:setting.sigma) }
         value=project;value.cursorSamples=samples;smoothing=setting
+        let path=project.canvasBackground?.kind == .image ? project.canvasBackground?.value:nil
+        if path != backgroundPath { backgroundPath=path;backgroundImage=path.flatMap(CanvasBackground.loadImage) }
     }
 }
 package enum Renderer {
@@ -28,7 +35,7 @@ package enum Renderer {
     package static func composition(asset: AVAsset, project: Project, state: RenderState? = nil) -> AVVideoComposition {
         let state=state ?? RenderState(project)
         let composition = AVVideoComposition(asset: asset) { request in
-            let project=state.project
+            let (project,backgroundImage)=state.snapshot
             let source = request.sourceImage
             let rect = source.extent
             let z = project.zoom(at: request.compositionTime.seconds)
@@ -49,8 +56,14 @@ package enum Renderer {
             let combined = z.scale * scale
             let resampled = abs(combined-1)<0.000001 ? content : content.applyingFilter("CILanczosScaleTransform",parameters:[kCIInputScaleKey:combined,kCIInputAspectRatioKey:1])
             let foreground = resampled.transformed(by:CGAffineTransform(translationX:tx*scale+frame.minX,y:ty*scale+frame.minY)).cropped(to:frame)
-            let colors = palettes[project.background] ?? palettes["Lavender"]!
-            let bg = CIFilter(name: "CILinearGradient", parameters: ["inputPoint0": CIVector(x: 0, y: rect.height), "inputPoint1": CIVector(x: rect.width, y: 0), "inputColor0": colors.0, "inputColor1": colors.1])!.outputImage!.cropped(to: rect)
+            if project.padding == 0 { request.finish(with:foreground.cropped(to:rect),context:nil);return }
+            let bg:CIImage
+            if let background=project.canvasBackground { bg=background.render(in:rect,image:backgroundImage) }
+            else if BackgroundPreset.all.contains(where: { $0.id == project.background }) { bg=CanvasBackground(kind:.gradient,value:project.background).render(in:rect,image:nil) }
+            else {
+                let colors=palettes[project.background] ?? palettes["Lavender"]!
+                bg=CIFilter(name:"CILinearGradient",parameters:["inputPoint0":CIVector(x:0,y:rect.height),"inputPoint1":CIVector(x:rect.width,y:0),"inputColor0":colors.0,"inputColor1":colors.1])!.outputImage!.cropped(to:rect)
+            }
             let mask = CIFilter(name: "CIRoundedRectangleGenerator", parameters: ["inputExtent": CIVector(cgRect: frame), "inputRadius": min(24, inset / 2), "inputColor": CIColor.white])!.outputImage!.cropped(to: rect)
             let result = foreground.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: bg, kCIInputMaskImageKey: mask]).cropped(to: rect)
             request.finish(with: result, context: nil)

@@ -1,5 +1,5 @@
 import SwiftUI
-import FramecraftCore
+import VizuallyScreenCore
 import CoreText
 
 struct AppearanceLab: View {

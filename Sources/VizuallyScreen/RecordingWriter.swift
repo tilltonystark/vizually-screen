@@ -1,6 +1,6 @@
 import AVFoundation
 import ScreenCaptureKit
-import FramecraftCore
+import VizuallyScreenCore
 
 struct CaptureResult {
     let url: URL
@@ -9,7 +9,7 @@ struct CaptureResult {
     let dropped: Int
 }
 final class RecordingWriter: NSObject, SCStreamOutput, @unchecked Sendable {
-    let queue=DispatchQueue(label:"Framecraft.capture.writer",qos:.userInitiated)
+    let queue=DispatchQueue(label:"VizuallyScreen.capture.writer",qos:.userInitiated)
     private var writer: AVAssetWriter?
     private var video: AVAssetWriterInput?
     private var audio: AVAssetWriterInput?

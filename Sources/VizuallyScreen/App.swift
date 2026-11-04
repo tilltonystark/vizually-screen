@@ -2,15 +2,15 @@ import SwiftUI
 import AVKit
 
 @main
-struct FramecraftApp: App {
+struct VizuallyScreenApp: App {
     @StateObject private var editor = Editor()
     @StateObject private var capture = Capture()
     @StateObject private var theme = StudioTheme()
     init() { Geist.register() }
     private var locked: Bool { editor.busy || capture.recording || capture.busy }
     var body: some Scene {
-        WindowGroup {
-            StudioView(editor: editor, capture: capture)
+        WindowGroup("Vizually Screen") {
+            WorkspaceView(editor: editor, capture: capture)
                 .environmentObject(theme)
                 .font(Geist.font()).foregroundStyle(Ink.primary)
                 .frame(minWidth: 1080, minHeight: 740)
@@ -31,7 +31,8 @@ struct FramecraftApp: App {
                 Button("Open Demo Project") { Task { await editor.loadDemo() } }.disabled(locked)
             }
             CommandMenu("Studio") {
-                Button("Play / Pause", action: editor.togglePlayback).keyboardShortcut(.space, modifiers: []).disabled(editor.project == nil || locked)
+                Button("All recordings",action:editor.returnHome).keyboardShortcut("h",modifiers:[.command,.shift]).disabled(locked)
+                Button("Play / Pause", action: editor.togglePlayback).keyboardShortcut(.space, modifiers: []).disabled(editor.project == nil || locked || editor.showsHome)
                 Button("Add Zoom", action: editor.addZoom).keyboardShortcut("z", modifiers: [.command, .shift]).disabled(editor.project == nil || locked)
                 LabCommand()
             }
@@ -39,9 +40,9 @@ struct FramecraftApp: App {
         Window("Appearance Lab", id: "appearance-lab") {
             AppearanceLab().environmentObject(theme).font(Geist.font()).foregroundStyle(Ink.primary).preferredColorScheme(.light)
         }.defaultSize(width: 660, height: 690).windowResizability(.contentSize)
-        MenuBarExtra("Framecraft", systemImage: capture.recording ? "record.circle.fill" : "viewfinder") {
+        MenuBarExtra("Vizually Screen", systemImage: capture.recording ? "record.circle.fill" : "viewfinder") {
             if capture.recording { Button("Stop Recording") { Task { await capture.stop() } }.disabled(capture.busy) }
-            else { Text("Open Framecraft to start recording") }
+            else { Text("Open Vizually Screen to start recording") }
         }
     }
 }

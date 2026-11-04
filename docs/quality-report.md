@@ -2,15 +2,15 @@
 
 ## Status
 
-Framecraft v0.3 has a working native capture/edit/export foundation. It is not at demonstrated Shotbase/Screen Studio parity. Native capture and a controlled synthetic output test are now verified; a matched competitor export is still unverified.
+Vizually Screen v0.3 has a working native capture/edit/export foundation. It is not at demonstrated Shotbase/Screen Studio parity. Native capture and a controlled synthetic output test are now verified; a matched competitor export is still unverified.
 
 ## Access failure
 
-The running v0.2 app returned “The user declined TCCs for application, window, display capture” while System Settings showed Framecraft enabled. Its ad-hoc code-signing designated requirement was a binary hash. A rebuilt binary can differ from the settings-authorized build. No valid local code-signing identity was installed. Broad-permission error handling also mislabeled unrelated failures.
+The running v0.2 app returned “The user declined TCCs for application, window, display capture” while System Settings showed Vizually Screen enabled. Its ad-hoc code-signing designated requirement was a binary hash. A rebuilt binary can differ from the settings-authorized build. No valid local code-signing identity was installed. Broad-permission error handling also mislabeled unrelated failures.
 
 v0.3 uses SCContentSharingPicker instead of enumerating the full desktop. The person explicitly chooses a window/display and macOS authorizes that source for the session. This is Apple's intended route, not a weakened security requirement. [Apple WWDC privacy guidance](https://developer.apple.com/videos/play/wwdc2023/10053/) and [ScreenCaptureKit](https://developer.apple.com/documentation/screencapturekit).
 
-The user completed source selection and started a recording. Framecraft finalized a 66.363s HEVC file at 3024×1654, with one audio track, 7,943 pointer samples, and zero writer-backpressure frame drops. The source was largely static and the raw track had a very sparse nominal frame rate (~0.03). This test verifies the picker/encoder/finalization path, not 60 unique content updates per second, audio synchronization, or performance on a long moving 5K screen. Private capture pixels and project data are not in this repository.
+The user completed source selection and started a recording. Vizually Screen finalized a 66.363s HEVC file at 3024×1654, with one audio track, 7,943 pointer samples, and zero writer-backpressure frame drops. The source was largely static and the raw track had a very sparse nominal frame rate (~0.03). This test verifies the picker/encoder/finalization path, not 60 unique content updates per second, audio synchronization, or performance on a long moving 5K screen. Private capture pixels and project data are not in this repository.
 
 ## Output changes
 
@@ -35,7 +35,7 @@ The arrow overlay is intentional scope: text-selection/resize/custom cursor shap
 
 ## Synthetic measurement
 
-Reproduce with `swift run ... FramecraftQuality /tmp/framecraft-quality` (cache/sandbox flags are the same as README). It generates a 1920×1080, 60fps, two-second ProRes 4444 reference containing 10–16px monochrome/colored text, single-pixel patterns, gray ramps and motion. Candidates use identical dimensions and no framing/zoom. Scores compare four exact-time decoded frames to the decoded source, in sRGB. Text ROI is x=35,y=75,w=840,h=600. Higher PSNR is better; this does not measure perceived quality, OCR accuracy, HDR, live capture, or competitor quality.
+Reproduce with `swift run ... VizuallyScreenQuality /tmp/framecraft-quality` (cache/sandbox flags are the same as README). It generates a 1920×1080, 60fps, two-second ProRes 4444 reference containing 10–16px monochrome/colored text, single-pixel patterns, gray ramps and motion. Candidates use identical dimensions and no framing/zoom. Scores compare four exact-time decoded frames to the decoded source, in sRGB. Text ROI is x=35,y=75,w=840,h=600. Higher PSNR is better; this does not measure perceived quality, OCR accuracy, HDR, live capture, or competitor quality.
 
 | Profile | RGB PSNR | Text ROI PSNR | Actual bitrate | Presented samples |
 | --- | ---: | ---: | ---: | ---: |
@@ -74,7 +74,7 @@ Shotbase's dashboard/static/Motion UI was observed live. Its capture selection o
 
 ## Checks and remaining gaps
 
-Passed: native app build; continuous zoom/cursor math, native pixel sizing, short intervals, project/theme serialization/validation, palette contrast, 2560×1440/60fps eight-second demo decoding, trimmed 60fps export with audio track, cancellation cleanup and actual encode/decode calibration. A separate synthetic overlapping-zoom/pointer motion demo is generated locally by FramecraftQuality.
+Passed: native app build; continuous zoom/cursor math, native pixel sizing, short intervals, project/theme serialization/validation, palette contrast, 2560×1440/60fps eight-second demo decoding, trimmed 60fps export with audio track, cancellation cleanup and actual encode/decode calibration. A separate synthetic overlapping-zoom/pointer motion demo is generated locally by VizuallyScreenQuality.
 
 Still unverified: audio sync, long/high-motion/5K capture endurance, HDR/P3 preservation, all cursor shapes, window-resize/mixed-DPI edge cases, a matched Shotbase export, and subjective motion quality under a controlled side-by-side playback. A complete independent review was not available; this milestone was reviewed by its author.
 

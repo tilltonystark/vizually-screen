@@ -1,4 +1,4 @@
-GOAL: Make Framecraft usable for capture and improve recorded/output detail and motion for Satyam.
+GOAL: Make Vizually Screen usable for capture and improve recorded/output detail and motion for Satyam.
 CONTEXT: HANDOFF.md; docs/superpowers/plans/2026-11-03-quality-pipeline.md. Work was already authorized and underway when the prompt-optimiser instructions arrived. This brief pins the current shippable milestone; further broad milestones require discussion under the new instructions.
 DONE WHEN:
 - Native source picking produces a finalized capture despite the old settings-entry failure.

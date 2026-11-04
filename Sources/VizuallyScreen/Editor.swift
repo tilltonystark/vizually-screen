@@ -1,11 +1,16 @@
-import FramecraftCore
+import VizuallyScreenCore
 import AppKit
 import AVKit
 import UniformTypeIdentifiers
+import CryptoKit
 
 @MainActor
 final class Editor: ObservableObject {
     @Published var project: Project?
+    @Published var showsHome=true
+    var onLibraryChange:((URL,URL?)->Void)?
+    private var activeProjectURL:URL?
+    private var hasChanges=false
     @Published var duration: Double = 0
     @Published var playhead: Double = 0
     @Published var busy = false
@@ -44,8 +49,9 @@ final class Editor: ObservableObject {
             Task { @MainActor in self?.isPlaying = playing }
         }
     }
-    func load(_ url: URL, saved: Project? = nil) async {
+    func load(_ url: URL, saved: Project? = nil,projectURL:URL? = nil) async {
         guard !busy else { return }
+        guard persistWorkingCopy() else { return }
         let generation = UUID()
         loadGeneration = generation
         busy = true
@@ -57,12 +63,13 @@ final class Editor: ObservableObject {
             let duration = try await asset.load(.duration).seconds
             let tracks = try await asset.loadTracks(withMediaType: .video)
             guard let video = tracks.first, duration.isFinite, duration > 0 else { throw CocoaError(.fileReadCorruptFile) }
-            let sidecar=url.deletingPathExtension().appendingPathExtension("framecraft.json")
+            let sidecar=projectURL ?? ProjectFiles.adjacentProject(for:url)
             var project = saved ?? Project(sourcePath:url.path,trimEnd:duration)
-            if saved == nil, FileManager.default.fileExists(atPath:sidecar.path) {
+            if saved == nil, let sidecar {
                 project=try JSONDecoder().decode(Project.self,from:Data(contentsOf:sidecar));project.sourcePath=url.path
             }
             try project.validate(duration: duration)
+            if project.padding>0,let background=project.canvasBackground,background.kind == .image,CanvasBackground.loadImage(background.value) == nil { throw MediaExporter.qualityError("The background image is missing. Restore it or open a project with an available background.") }
             let naturalSize = try await video.load(.naturalSize)
             let transform = try await video.load(.preferredTransform)
             let transformedSize = naturalSize.applying(transform)
@@ -89,6 +96,8 @@ final class Editor: ObservableObject {
             player.pause()
             // Commit only after validation and staging; failed loads preserve the current edit.
             self.asset = asset; self.duration = duration; self.project = project
+            activeProjectURL=sidecar;hasChanges=false;showsHome=false
+            onLibraryChange?(url,sidecar)
             self.videoSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
             self.sourceFrameRate = frameRate
             self.thumbnails = images
@@ -113,14 +122,14 @@ final class Editor: ObservableObject {
                 p.zooms=await Task.detached(priority:.userInitiated) { AutoFocus.suggest(samples:samples,start:0,end:end) }.value
             }
             let encoder=JSONEncoder();encoder.outputFormatting=[.prettyPrinted,.sortedKeys]
-            try encoder.encode(p).write(to:result.url.deletingPathExtension().appendingPathExtension("framecraft.json"),options:.atomic)
-            busy=false;await load(result.url,saved:p)
+            try encoder.encode(p).write(to:ProjectFiles.sidecar(for:result.url),options:.atomic)
+            busy=false;await load(result.url,saved:p,projectURL:ProjectFiles.sidecar(for:result.url))
             message="Recording saved · \(result.dropped) dropped frames"
         } catch { busy=false;self.error=error.localizedDescription }
     }
     func loadDemo() async {
         guard !busy else { return }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Framecraft-studio-demo-v3.mp4")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("VizuallyScreen-studio-demo-v3.mp4")
         busy = true
         message = "Preparing demo…"
         do {
@@ -146,15 +155,15 @@ final class Editor: ObservableObject {
         if panel.runModal() == .OK, let url = panel.url {
             do {
                 let saved = try JSONDecoder().decode(Project.self, from: Data(contentsOf: url))
-                Task { await load(URL(fileURLWithPath: saved.sourcePath), saved: saved) }
+                Task { await load(URL(fileURLWithPath: saved.sourcePath), saved: saved,projectURL:url) }
             } catch { self.error = error.localizedDescription }
         }
     }
     func saveProject() {
         guard let project else { return }
-        let panel = NSSavePanel(); panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = "Untitled.framecraft.json"
+        let panel = NSSavePanel(); panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = "Untitled.vizually.json"
         if panel.runModal() == .OK, let url = panel.url {
-            do { let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]; try encoder.encode(project).write(to: url, options: .atomic); message = "Project saved" }
+            do { let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]; try encoder.encode(project).write(to: url, options: .atomic);activeProjectURL=url;hasChanges=false;onLibraryChange?(URL(fileURLWithPath:project.sourcePath),url);message = "Project saved" }
             catch { self.error = error.localizedDescription }
         }
     }
@@ -164,6 +173,7 @@ final class Editor: ObservableObject {
         do { try p.validate(duration: duration) }
         catch { self.error = error.localizedDescription; return }
         project = p
+        hasChanges=true
         if let selectedZoomID, !p.zooms.contains(where: { $0.id == selectedZoomID }) { self.selectedZoomID = nil }
         renderState?.update(p)
         // AVPlayer caches paused frames. A new composition identity invalidates
@@ -236,15 +246,40 @@ final class Editor: ObservableObject {
         if let p = project, playhead > p.trimEnd || playhead < p.trimStart { seek(p.trimStart) }
     }
     func cancelExport() { exportControl?.cancel();message="Cancelling export…" }
+    @discardableResult func persistWorkingCopy() -> Bool {
+        guard let project else { return true }
+        let source=URL(fileURLWithPath:project.sourcePath)
+        guard !source.lastPathComponent.contains("studio-demo-") else { return true }
+        if !hasChanges,let activeProjectURL { onLibraryChange?(source,activeProjectURL);return true }
+        do {
+            let folder=RecordingLibrary.support.appendingPathComponent("Projects")
+            try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+            let key=SHA256.hash(data:Data(source.standardizedFileURL.path.utf8)).prefix(12).map { String(format:"%02x",$0) }.joined()
+            let url=folder.appendingPathComponent("\(key).vizually.json")
+            let encoder=JSONEncoder();encoder.outputFormatting=[.prettyPrinted,.sortedKeys]
+            try encoder.encode(project).write(to:url,options:.atomic)
+            activeProjectURL=url;hasChanges=false;onLibraryChange?(source,url);return true
+        } catch { self.error="Could not save this edit: \(error.localizedDescription)";return false }
+    }
+    func returnHome() { guard !busy,persistWorkingCopy() else { return };player.pause();showsHome=true }
+    func openRecording(_ entry:RecordingReference) {
+        let url=URL(fileURLWithPath:entry.sourcePath)
+        if let path=entry.projectPath,FileManager.default.fileExists(atPath:path) {
+            do {
+                var saved=try JSONDecoder().decode(Project.self,from:Data(contentsOf:URL(fileURLWithPath:path)));saved.sourcePath=url.path
+                Task { await load(url,saved:saved,projectURL:URL(fileURLWithPath:path)) }
+            } catch { self.error="Could not open this saved edit: \(error.localizedDescription)" }
+        } else { Task { await load(url) } }
+    }
     func export(quality: VideoQuality = .high) {
         guard let project, let asset else { return }
-        let panel = NSSavePanel(); panel.allowedContentTypes = quality == .master ? [.quickTimeMovie] : [.mpeg4Movie]; panel.nameFieldStringValue = "Framecraft-export.\(quality.fileExtension)"
+        let panel = NSSavePanel(); panel.allowedContentTypes = quality == .master ? [.quickTimeMovie] : [.mpeg4Movie]; panel.nameFieldStringValue = "Vizually Screen-export.\(quality.fileExtension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard url.standardizedFileURL.path != URL(fileURLWithPath: project.sourcePath).standardizedFileURL.path else { error = "Choose a different filename to preserve your original recording."; return }
         busy = true; isExporting=true;exportProgress=0;let control=ExportControl();exportControl=control;player.pause(); message = "Rendering your video…"
         Task {
             // Export to a sibling temporary file before replacing an existing destination.
-            let temp = url.deletingLastPathComponent().appendingPathComponent(".framecraft-\(UUID().uuidString).\(quality.fileExtension)")
+            let temp = url.deletingLastPathComponent().appendingPathComponent(".vizually-screen-\(UUID().uuidString).\(quality.fileExtension)")
             defer { busy = false;isExporting=false;exportControl=nil;try? FileManager.default.removeItem(at: temp) }
             do {
                 try project.validate(duration: duration)

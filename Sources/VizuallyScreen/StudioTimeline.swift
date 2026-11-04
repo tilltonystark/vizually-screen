@@ -1,5 +1,5 @@
 import SwiftUI
-import FramecraftCore
+import VizuallyScreenCore
 
 struct StudioTimeline: View {
     @ObservedObject var editor: Editor

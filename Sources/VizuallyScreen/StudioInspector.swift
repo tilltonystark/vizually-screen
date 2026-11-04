@@ -1,16 +1,10 @@
 import SwiftUI
-import FramecraftCore
+import VizuallyScreenCore
 
 struct StudioInspector: View {
     @ObservedObject var editor: Editor
     @Binding var tab: String
     @EnvironmentObject var theme: StudioTheme
-    private let palettes: [(String, Color, Color)] = [
-        ("Lavender", .oklch(0.72, 0.13, 290), .oklch(0.37, 0.10, 290)),
-        ("Ocean", .oklch(0.74, 0.10, 200), .oklch(0.34, 0.08, 250)),
-        ("Peach", .oklch(0.83, 0.10, 55), .oklch(0.49, 0.13, 10)),
-        ("Midnight", .oklch(0.36, 0.03, 260), .oklch(0.18, 0.02, 260))
-    ]
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 4) {
@@ -48,20 +42,10 @@ struct StudioInspector: View {
         HStack {
             heading("Background", detail: "Optional framing around your video. None uses the entire source without a background.")
             Button("None") { editor.update { $0.padding=0 } }.buttonStyle(StudioButtonStyle(quiet:true))
-                .accessibilityLabel("No background").accessibilityAddTraits(editor.project?.padding == 0 ? .isSelected:[]).disabled(editor.project == nil)
+                .feedbackTarget("canvas.none","No background").accessibilityLabel("No background").accessibilityAddTraits(editor.project?.padding == 0 ? .isSelected:[]).disabled(editor.project == nil)
         }
-        HStack(spacing: 10) {
-            ForEach(palettes, id: \.0) { name, light, dark in
-                Button { editor.update { $0.background = name;if $0.padding == 0 { $0.padding=0.07 } } } label: {
-                    RoundedRectangle(cornerRadius: 8).fill(LinearGradient(colors: [light, dark], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 44, height: 44)
-                        .overlay { if editor.project?.background == name && editor.project?.padding != 0 { Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).shadow(color: .black.opacity(0.4), radius: 2) } }
-                        .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(.black.opacity(0.1), lineWidth: 1) }
-                }.buttonStyle(.plain).help(name).accessibilityLabel("\(name) background").accessibilityAddTraits(editor.project?.background == name && editor.project?.padding != 0 ? .isSelected : [])
-            }
-        }.disabled(editor.project == nil)
+        BackgroundPicker(editor:editor).feedbackTarget("canvas.background","Background options")
         if let p = editor.project {
-            Text(p.background).font(Geist.font(11)).foregroundStyle(Ink.secondary).padding(.top, -14)
             parameter("Padding", value: Binding(get: { p.padding * 100 }, set: { v in editor.update { $0.padding = v / 100 } }), range: 0...20, suffix: "%", decimals: 0)
         } else {
             HStack { Text("Padding"); Spacer(); Text("0%").foregroundStyle(Ink.secondary) }.font(Geist.font(12))
@@ -94,9 +78,9 @@ struct StudioInspector: View {
             }
             Picker("Pointer motion",selection:Binding(get:{p.pointerSmoothing ?? .smooth},set:{ value in editor.update { $0.pointerSmoothing=value } })) {
                 ForEach(PointerSmoothing.allCases) { value in Text(value.name).tag(value) }
-            }.labelsHidden()
+            }.labelsHidden().feedbackTarget("motion.pointer","Pointer smoothing")
             HStack {
-                Button(action:editor.suggestZooms) { Label("Auto focus",systemImage:"sparkles") }.buttonStyle(StudioButtonStyle())
+                Button(action:editor.suggestZooms) { Label("Auto focus",systemImage:"sparkles") }.buttonStyle(StudioButtonStyle()).feedbackTarget("motion.autofocus","Auto focus")
                 InfoHint(title:"Auto focus",text:"Suggests zooms from pointer movement and pauses. Refreshing replaces previous automatic suggestions and keeps your manual zooms. Each suggestion stays editable.")
             }
         }
@@ -128,7 +112,7 @@ struct StudioInspector: View {
     private func parameter(_ label: String, value: Binding<Double>, range: ClosedRange<Double>, suffix: String, decimals: Int) -> some View {
         VStack(spacing: 5) {
             HStack { Text(label); Spacer(); Text(String(format: "%.*f%@", decimals, value.wrappedValue, suffix)).monospacedDigit().foregroundStyle(Ink.secondary).padding(.horizontal, 8).padding(.vertical, 6).background(Ink.soft, in: RoundedRectangle(cornerRadius: 6)) }.font(Geist.font(12))
-            Slider(value: value, in: range).tint(theme.accent).accessibilityLabel(label).frame(minHeight: 30)
+            Slider(value: value, in: range).tint(theme.accent).accessibilityLabel(label).frame(minHeight: 30).feedbackTarget("parameter.\(label)",label)
         }
     }
     private func detailRow(_ title: String, _ value: String) -> some View {

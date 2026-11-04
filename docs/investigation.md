@@ -44,7 +44,7 @@ The app compiled with Swift 6.1.2. Standalone checks passed for smooth zoom boun
 
 User supplied Shotbase as a comparable installed app. Inspected through native UI automation; these are ordinary live UI observations, not REA Evidence. Dashboard shows search, capture library, folders and a Capture action. Its editor provides a dominant canvas, compact header actions, a vertical tool rail and grouped inspector. Static and Motion tabs switch editing contexts. Motion mode exposes playback/time, a ruler, a motion-effects lane and a source strip; screenshot motion defaults to five seconds in the inspected item. Inspector exposes source-image focal controls, background/padding, radius, shadows and browser framing. Opened an existing screenshot and switched UI modes; no source settings were intentionally changed and nothing was exported/shared/deleted. Export format/result and recording/cursor quality were not verified. No extra app access was needed for this UI inspection. A screen lock interrupted checks and the user unlocked the Mac.
 
-Applied lessons: dominant preview, compact recording sheet, selected timeline regions, grouped canvas/zoom inspector, and a source thumbnail behind the zoom focal point. Framecraft remains light-mode per user preference. Shotbase UI observations do not establish full Screen Studio output parity.
+Applied lessons: dominant preview, compact recording sheet, selected timeline regions, grouped canvas/zoom inspector, and a source thumbnail behind the zoom focal point. Vizually Screen remains light-mode per user preference. Shotbase UI observations do not establish full Screen Studio output parity.
 
 ## v0.3 evidence update
 

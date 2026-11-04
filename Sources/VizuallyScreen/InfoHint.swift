@@ -1,5 +1,5 @@
 import SwiftUI
-import FramecraftCore
+import VizuallyScreenCore
 
 /// Shared progressive help: fixed width, hover discovery, click/keyboard fallback.
 struct InfoHint: View {

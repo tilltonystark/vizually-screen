@@ -1,13 +1,13 @@
 import SwiftUI
 import AVKit
-import FramecraftCore
+import VizuallyScreenCore
 
 struct StudioView: View {
     @ObservedObject var editor: Editor
     @ObservedObject var capture: Capture
     @EnvironmentObject var theme: StudioTheme
     @Environment(\.openWindow) private var openWindow
-    @State private var showRecording = false
+    @Binding var showRecording:Bool
     @State private var showExport = false
     @State private var inspectorTab = "Canvas"
     @State private var dropTargeted = false
@@ -15,36 +15,34 @@ struct StudioView: View {
     private var title: String { editor.project.map { URL(fileURLWithPath: $0.sourcePath).deletingPathExtension().lastPathComponent } ?? "Untitled project" }
     var body: some View {
         VStack(spacing: 0) {
-            toolbar
+            toolbar.feedbackTarget("editor.header","Editor header")
             Rule()
             HStack(spacing: 0) {
                 VStack(spacing: 0) {
-                    preview
-                    transport
+                    preview.feedbackTarget("editor.preview","Video preview")
+                    transport.feedbackTarget("editor.playback","Playback controls")
                     Rule()
-                    StudioTimeline(editor: editor).disabled(locked)
+                    StudioTimeline(editor: editor).disabled(locked).feedbackTarget("editor.timeline","Timeline")
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 Rule(vertical: true)
-                StudioInspector(editor: editor, tab: $inspectorTab).frame(width: 282).disabled(locked)
+                StudioInspector(editor: editor, tab: $inspectorTab).feedbackTarget("editor.inspector","Inspector").frame(width: 282).disabled(locked)
             }
             Rule()
             statusBar
         }
         .background(Color.white)
+        .ignoresSafeArea(.container,edges:.top)
+        .background(WindowChrome())
         .tint(theme.accent)
         .sheet(isPresented: $showExport) { ExportSheet(editor:editor).environmentObject(theme).font(Geist.font()).preferredColorScheme(.light) }
-        .sheet(isPresented: $showRecording) { RecordingSheet(capture: capture).environmentObject(theme).font(Geist.font()).preferredColorScheme(.light) }
         .onChange(of: editor.selectedZoomID) { _, value in if value != nil { inspectorTab = "Zoom" } }
-        .alert("Unable to complete action", isPresented: Binding(get: { editor.error != nil || capture.error != nil }, set: { if !$0 { editor.error = nil; capture.error = nil } })) {
-            Button("OK") { editor.error = nil; capture.error = nil }
-        } message: { Text(editor.error ?? capture.error ?? "") }
     }
     private var toolbar: some View {
         HStack(spacing: 12) {
-            Image(systemName: "viewfinder").font(.system(size: 21, weight: .medium)).foregroundStyle(theme.accent)
+            IconButton(symbol:"chevron.left",title:"All recordings",action:editor.returnHome).disabled(locked)
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(Geist.font(13, .medium)).lineLimit(1).truncationMode(.middle).help(title)
-                Text("Framecraft").font(Geist.font(11)).foregroundStyle(Ink.secondary)
+                Text("Vizually Screen").font(Geist.font(13, .semibold))
+                Text(title).font(Geist.font(11)).foregroundStyle(Ink.secondary).lineLimit(1).truncationMode(.middle).help(title)
             }.frame(maxWidth: 300, alignment: .leading)
             Spacer(minLength: 8)
             if capture.recording {
@@ -60,10 +58,10 @@ struct StudioView: View {
                 Button("Open Demo Project") { Task { await editor.loadDemo() } }
                 Divider()
                 Button("Appearance Lab…") { openWindow(id: "appearance-lab") }
-            } label: { Image(systemName: "ellipsis").frame(width: 24, height: 40) }.menuStyle(.borderlessButton).fixedSize().help("Project actions").disabled(locked)
+            } label: { Image(systemName: "ellipsis").frame(width: 40, height: 40) }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Project actions").disabled(locked)
             Button { showExport=true } label: { HStack(spacing: 8) { Text("Export video"); Image(systemName: "arrow.up.right") } }
-                .buttonStyle(StudioButtonStyle(primary: true)).disabled(editor.project == nil || locked)
-        }.padding(.leading, 82).padding(.trailing, 20).frame(height: 70)
+                .buttonStyle(StudioButtonStyle(primary: true)).disabled(editor.project == nil || locked).feedbackTarget("editor.export","Export video")
+        }.padding(.leading,StudioLayout.headerLeading).padding(.trailing,20).frame(height:StudioLayout.headerHeight)
     }
     private var preview: some View {
         ZStack {
@@ -159,7 +157,7 @@ struct RecordingSheet: View {
             HStack { Toggle("Smooth pointer",isOn:$capture.smoothCursor).toggleStyle(.switch).tint(theme.accent).disabled(!capture.supportsSmoothPointer);InfoHint(title:"Smooth pointer",text:"Records movement separately and renders a smooth arrow. Turn off to keep original cursor shapes, such as text selection and resize. Requires macOS 15.2 or later.") }
             HStack { Toggle("Automatic zoom",isOn:$capture.automaticZoom).toggleStyle(.switch).tint(theme.accent).disabled(!capture.smoothCursor);InfoHint(title:"Automatic zoom",text:"Adds editable zooms where your pointer settles after moving. Requires Smooth pointer. You can adjust or remove each zoom in the editor.") }
             Toggle("Include system audio", isOn: $capture.systemAudio).toggleStyle(.switch).tint(theme.accent)
-            HStack { Text("Saved to Movies/Framecraft").font(Geist.font(12)).foregroundStyle(Ink.secondary);InfoHint(title:"Saved recordings",text:"The original video and its pointer data are saved together in Movies/Framecraft. Stop recording from the app or menu bar.") }
+            HStack { Text("Saved to Movies/Vizually Screen").font(Geist.font(12)).foregroundStyle(Ink.secondary);InfoHint(title:"Saved recordings",text:"The original video and its pointer data are saved together in Movies/Vizually Screen. Stop recording from the app or menu bar.") }
             if let error = capture.error { Text(error).font(Geist.font(12)).foregroundStyle(.red).textSelection(.enabled) }
             HStack { Spacer(); Button("Cancel") { dismiss() }.buttonStyle(StudioButtonStyle()); Button("Start recording") { Task { await capture.start(); if capture.error == nil { dismiss() } } }.buttonStyle(StudioButtonStyle(primary: true)).disabled(!capture.hasSource || capture.busy || capture.picking) }
         }.padding(28).frame(width: 450).foregroundStyle(Ink.primary).background(.white)

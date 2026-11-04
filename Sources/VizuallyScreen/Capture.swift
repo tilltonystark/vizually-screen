@@ -1,7 +1,7 @@
 import AppKit
 import ScreenCaptureKit
 import AVFoundation
-import FramecraftCore
+import VizuallyScreenCore
 
 @MainActor
 final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharingPickerObserver {
@@ -82,7 +82,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
             if quality != .master { config.colorMatrix=CGDisplayStream.yCbCrMatrix_ITU_R_709_2 }
             config.showsCursor = !smoothCursor;config.capturesAudio=systemAudio;config.excludesCurrentProcessAudio=true
             config.ignoreShadowsSingleWindow=true
-            let folder=FileManager.default.urls(for:.moviesDirectory,in:.userDomainMask)[0].appendingPathComponent("Framecraft")
+            let folder=FileManager.default.urls(for:.moviesDirectory,in:.userDomainMask)[0].appendingPathComponent("Vizually Screen")
             try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
             let url=folder.appendingPathComponent("Recording-\(UUID().uuidString.prefix(8)).\(quality.fileExtension)")
             let writer=RecordingWriter(url:url,quality:quality,audioEnabled:systemAudio,onBounds: { [weak self] rect in Task { @MainActor in guard let self,self.sessionID == session,rect.width>0,rect.height>0 else { return };self.cursorBounds=rect } }) { [weak self] size in Task { @MainActor in guard let self,self.sessionID == session,self.stream != nil else { return };self.sourceSummary="\(filter.style == .window ? "Window":"Screen") · \(Int(size.width)) × \(Int(size.height))";self.beginRecordingClock() } }
@@ -128,7 +128,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     }
     private func cleanup() { sessionID=UUID();recordingTimer?.invalidate();recordingTimer=nil;began=nil;cursorTimer?.invalidate();cursorTimer=nil;stream=nil;output=nil;recording=false;busy=false;stopping=false;filter=nil;hasSource=false;sourceSummary="Choose a source for the next recording";SCContentSharingPicker.shared.isActive=false }
     private func fail(_ error: Error) {
-        output?.cancel();self.error="\(error.localizedDescription)\n\((error as NSError).domain) (\((error as NSError).code)). Select the source again with the macOS picker. If macOS still refuses, quit Framecraft and re-enable this build in Screen & System Audio Recording."
+        output?.cancel();self.error="\(error.localizedDescription)\n\((error as NSError).domain) (\((error as NSError).code)). Select the source again with the macOS picker. If macOS still refuses, quit Vizually Screen and re-enable this build in Screen & System Audio Recording."
         cleanup()
     }
     nonisolated func contentSharingPicker(_ picker:SCContentSharingPicker,didCancelFor stream:SCStream?) { Task { @MainActor in self.picking=false } }

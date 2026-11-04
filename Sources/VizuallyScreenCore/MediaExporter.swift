@@ -12,6 +12,9 @@ package enum MediaExporter {
     package static func export(asset: AVAsset, project: Project, quality: VideoQuality, to url: URL,
                                control: ExportControl = ExportControl(), progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws {
         try project.validate(duration: try await asset.load(.duration).seconds)
+        if project.padding>0,let background=project.canvasBackground,background.kind == .image,CanvasBackground.loadImage(background.value) == nil {
+            throw qualityError("The background image is missing or unreadable. Choose another image or select None.")
+        }
         guard let track = try await asset.loadTracks(withMediaType: .video).first else { throw CocoaError(.fileReadCorruptFile) }
         let fps = max(60, Double(try await track.load(.nominalFrameRate)))
         let composition = Renderer.composition(asset: asset, project: project)
@@ -73,5 +76,5 @@ package enum MediaExporter {
         if control.isCancelled { try? FileManager.default.removeItem(at:url);throw CancellationError() }
         progress(1)
     }
-    package static func qualityError(_ text: String) -> NSError { NSError(domain:"Framecraft.Quality",code:1,userInfo:[NSLocalizedDescriptionKey:text]) }
+    package static func qualityError(_ text: String) -> NSError { NSError(domain:"VizuallyScreen.Quality",code:1,userInfo:[NSLocalizedDescriptionKey:text]) }
 }

@@ -23,7 +23,8 @@ package struct Project: Codable {
     package var trimStart: Double = 0
     package var trimEnd: Double
     package var padding: Double = 0
-    package var background: String = "Lavender"
+    package var background: String = "Dune"
+    package var canvasBackground: CanvasBackground? = nil
     package var zooms: [Zoom] = []
     package var cursorSamples: [CursorSample]? = nil
     package var pointerSmoothing: PointerSmoothing? = nil
@@ -66,10 +67,11 @@ package struct Project: Codable {
         guard version == 1, duration.isFinite, trimStart.isFinite, trimEnd.isFinite,
               trimStart >= 0, trimEnd <= duration + 0.05, trimEnd > trimStart,
               padding.isFinite, (0...0.2).contains(padding),
+              canvasBackground?.isValid != false,
               (cursorSamples == nil || (cursorSamples!.count <= 2_000_000 && zip(cursorSamples!,cursorSamples!.dropFirst()).allSatisfy { $0.time <= $1.time } && cursorSamples!.allSatisfy { $0.time.isFinite && $0.time >= -0.1 && $0.x.isFinite && $0.y.isFinite && (0...1).contains($0.x) && (0...1).contains($0.y) })),
               Set(zooms.map(\.id)).count == zooms.count,
               zooms.allSatisfy({ $0.start.isFinite && $0.start >= 0 && $0.start < duration && $0.duration.isFinite && $0.duration > 0 && $0.start + $0.duration <= duration + 0.05 && $0.scale.isFinite && (1...4).contains($0.scale) && $0.x.isFinite && (0...1).contains($0.x) && $0.y.isFinite && (0...1).contains($0.y) }) else {
-            throw NSError(domain: "Framecraft", code: 1, userInfo: [NSLocalizedDescriptionKey: "This project contains invalid edits or a mismatched source video."])
+            throw NSError(domain: "VizuallyScreen", code: 1, userInfo: [NSLocalizedDescriptionKey: "This project contains invalid edits or a mismatched source video."])
         }
     }
 }

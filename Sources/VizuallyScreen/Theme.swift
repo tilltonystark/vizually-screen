@@ -1,11 +1,11 @@
 import SwiftUI
 import CoreText
-import FramecraftCore
+import VizuallyScreenCore
 import UniformTypeIdentifiers
 
 enum StudioResources {
     static let bundle: Bundle = {
-        if let url = Bundle.main.resourceURL?.appendingPathComponent("Framecraft_Framecraft.bundle"), let bundle = Bundle(url: url) { return bundle }
+        if let url = Bundle.main.resourceURL?.appendingPathComponent("VizuallyScreen_VizuallyScreen.bundle"), let bundle = Bundle(url: url) { return bundle }
         return Bundle.module
     }()
 }
@@ -53,6 +53,10 @@ enum Ink {
     static let soft = Color.oklch(0.975, 0.002)
 }
 enum StudioLayout {
+    static let panelGap:CGFloat=14
+    static let swatchHeight:CGFloat=40
+    static let headerHeight:CGFloat=56
+    static let headerLeading:CGFloat=92
     static let helpWidth:CGFloat=280
     static let helpPadding:CGFloat=16
     static let helpGap:CGFloat=6
@@ -60,6 +64,7 @@ enum StudioLayout {
     static let helpDelay:Duration = .milliseconds(250)
 }
 enum StudioType {
+    static var swatchLabel:Font { Geist.font(10) }
     static var sectionTitle:Font { Geist.font(13,.semibold) }
     static var controlLabel:Font { Geist.font(13,.medium) }
     static var caption:Font { Geist.font(12) }
@@ -117,7 +122,7 @@ struct IconButton: View {
     let symbol: String
     let title: String
     let action: () -> Void
-    var body: some View { Button(action: action) { Image(systemName: symbol).frame(width: 20) }.buttonStyle(StudioButtonStyle(quiet: true)).help(title).accessibilityLabel(title) }
+    var body: some View { Button(action: action) { Image(systemName: symbol).frame(width: 20) }.buttonStyle(StudioButtonStyle(quiet: true)).help(title).accessibilityLabel(title).feedbackTarget("control.\(symbol)",title) }
 }
 func clockText(_ seconds: Double) -> String {
     let safe = seconds.isFinite ? max(0, seconds) : 0

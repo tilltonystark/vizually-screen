@@ -1,46 +1,45 @@
-# Framecraft · native video studio
+# Vizually Screen
 
-A native macOS foundation for a Screen Studio alternative. SwiftUI, ScreenCaptureKit, AVFoundation and Core Image; no third-party runtime dependencies. Requires macOS 15+ and the Swift 6 toolchain. Current milestone: **v0.3 — capture access, output quality and motion**.
+A native macOS screen recorder and editor with smooth pointer motion, editable automatic zooms, and source-resolution video export. Light SwiftUI interface with bundled Geist. Requires macOS 15+ and Swift 6; separate pointer capture requires macOS 15.2+.
 
 ## Run
 
 ```sh
 bash scripts/build-app.sh
-open dist/Framecraft.app
+open 'dist/Vizually Screen.app'
 ```
 
-Click **Record → Choose screen or window…**, select a source in the macOS picker, then **Start recording**. The picker grants access to that source for the session. Stop in the app or its menu-bar item. Originals and pointer sidecars are kept under `~/Movies/Framecraft`; keep both together. The native picker avoids relying on a stale permission entry from an older development build.
+Record a screen or a single app window using the macOS source picker. An already-authorized sole display is selected automatically. Source dimensions come from the actual captured content; new recordings default to no additional background. Originals and pointer sidecars are stored in `~/Movies/Vizually Screen`.
 
-Choose **High quality** for everyday use (HEVC), **Most compatible** for broad playback support (H.264), or **Maximum detail** for a large editing file (ProRes 4444). The info icon explains each option. Capture uses the first actual frame's content bounds and native pixel density, without a silent 4K cap or unused capture-surface padding. An already-authorized sole display defaults automatically; source selection remains when macOS needs session authorization. New projects start without decorative framing; choose **None** to return to edge-to-edge video. Existing projects retain their settings. **Smooth pointer** hides the original cursor, records movement separately and renders a smoothed arrow. Turn it off to retain real system cursor shapes. Separate pointer capture requires macOS 15.2+; old videos with baked-in cursors cannot be smoothed retroactively.
+The old `.framecraft.json` project format remains readable. New projects use `.vizually.json`; originals are never overwritten by export.
 
-Import videos without screen access. Use **Add zoom**, then adjust focus, scale, duration, framing and trim. **Export video** offers explicit profiles, source resolution, 60fps composition, progress and cancellation. Source audio is retained. **Save project** writes JSON referencing the original video; keep the source at its original path. Recordings automatically get an adjacent project sidecar that is read on reimport.
+## Library and app feedback
 
-## Light studio
+The home screen discovers prior recordings and saved edits, including legacy recordings. Returning home saves a working copy without changing the original video. Use the comment icon at the bottom left (⌘⇧F), hover a control, click to pin a comment, then **Send to agent**. Comments include the SwiftUI target, source location, UI bounds and playback time. They are saved locally and sent only to the local Agentation server at `127.0.0.1:4747`; disconnected comments remain available for retry. No screenshots or recorded source paths are uploaded by the feedback bridge. The agent must be connected and reading that session to act; the button does not start an agent on its own.
 
-Bundled Geist Regular/Medium/Semibold, light semantic colors, a dominant preview, thumbnail timeline, selectable zoom regions and source-image focus pad. Native SwiftUI/Core Text text is antialiased; no global font preference is changed.
+## Edit and export
 
-**File → Open Demo Project** generates an eight-second 2560×1440/60fps local sample. **Studio → Appearance Lab** (⌘⇧L) tunes accent, canvas lightness, radius and spacing live, with JSON import/export. To ship an appearance, replace `Sources/Framecraft/Resources/appearance.json` and rebuild.
+- **Auto focus** suggests zooms where the pointer settles after moving. Suggestions are editable; manually adjusted zooms are protected when refreshing suggestions.
+- **Pointer motion:** Recorded, Smooth, Extra smooth. Requires a separate pointer track; a cursor baked into older footage cannot be removed.
+- **Background:** None, eight subdued gradients, solid/custom colors, imported images, or installed macOS wallpapers. Images fill the canvas without stretching. Wallpaper files stay local and are not redistributed in this repository.
+- **High quality:** recommended HEVC video, with smaller files.
+- **Most compatible:** H.264 for wider playback support, generally larger files.
+- **Maximum detail:** ProRes 4444 for further editing and colored-text detail, with very large files. It is not lossless.
 
-## Verification and evidence
+All profiles preserve source dimensions. Camera/pointer composition runs at 60fps; extra frames cannot recreate missing source detail. Export retains source audio, reports progress and supports cancellation. Info icons contain fixed-width explanations. Save/open projects as JSON referencing the original source.
+
+Use **File → Open Demo Project** for a safe 1440p60 sample with a separate pointer track and generated focus regions. **Studio → Appearance Lab** adjusts the light theme and exports settings as JSON.
+
+## Checks and evidence
 
 ```sh
-CLANG_MODULE_CACHE_PATH=/tmp/framecraft-module-cache SWIFTPM_MODULECACHE_OVERRIDE=/tmp/framecraft-module-cache swift build --disable-sandbox --cache-path /tmp/framecraft-swift-cache --scratch-path .build
-.build/debug/FramecraftChecks
-.build/debug/FramecraftQuality /tmp/framecraft-quality
+CLANG_MODULE_CACHE_PATH=/tmp/vizually-screen-module-cache SWIFTPM_MODULECACHE_OVERRIDE=/tmp/vizually-screen-module-cache swift build --disable-sandbox --cache-path /tmp/vizually-screen-swift-cache --scratch-path .build
+.build/debug/VizuallyScreenChecks
+.build/debug/VizuallyScreenQuality /tmp/vizually-screen-quality
 ```
 
-Media checks need access to macOS encoder services; a restricted execution sandbox may report AVFoundation -11834. Do not change global security settings. Checks cover camera continuity, pointer smoothing, native sizing, project/theme validation, demo decode, trimmed 60fps export with audio and cancellation cleanup. The quality executable generates synthetic encode/decode comparisons, detail crops and a motion demo; `--inspect /absolute/movie` audits media metadata.
+Media checks require access to macOS encoder services; restricted sandboxes can return AVFoundation -11834. Tests cover source-content cropping through real encode/decode, native sizing, camera/pointer motion, automatic-focus/manual-edit protection, project compatibility, background rendering, trimmed 60fps audio export and cancellation cleanup.
 
-[Quality report](docs/quality-report.md) contains reproducible measurements, actual REA inspection evidence and explicit limits. A native 3024×1654 capture finalized with zero writer-backpressure frame drops. This is **not demonstrated Shotbase/Screen Studio parity**: matched competitor output, subjective motion comparison, audio sync, long moving captures and HDR remain unverified.
+[Feature map and release gates](docs/feature-map.md), [Quality evidence](docs/quality-report.md), [source-fit review](docs/source-fit-review.md), [motion review](docs/motion-focus-review.md), [design system](DESIGN.md), [handoff](HANDOFF.md).
 
-## Current limits
-
-Manual zooms; arrow-only cursor reconstruction; SDR pipeline. Automated click-based zooms, shape-aware cursors, motion blur, webcam/mic, captions, undo/autosave, source relinking and relocatable bundles remain future work. Export cancellation and source-disconnect finalization are implemented; do not quit during recording/export. Unsaved edits are not restored after quitting.
-
-Builds are ad-hoc signed locally. For a stable signing identity, set `FRAMECRAFT_SIGNING_IDENTITY` when running the build script; signing/notarization for distribution is not configured. See [HANDOFF.md](HANDOFF.md) before continuing development.
-
-Source-fit regression evidence and limits: [review](docs/source-fit-review.md). The approved next checkpoints are in [milestones](docs/briefs/2026-11-03-vizually-screen-milestones.md).
-
-## Cursor-led motion (v0.4)
-
-New recordings can add editable automatic zooms where the pointer settles. In Zoom, choose Recorded, Smooth or Extra smooth pointer motion, or use Auto focus to refresh suggestions. Manual zooms are preserved. This requires a separate pointer track; older baked cursors cannot be reconstructed. [Motion evidence and limits](docs/motion-focus-review.md).
+This is not demonstrated Shotbase/Screen Studio parity. Matched competitor exports, audio synchronization, long high-motion capture, HDR/P3 and all cursor shapes remain unverified. The current pipeline is SDR. Builds are locally ad-hoc signed; set `VIZUALLY_SCREEN_SIGNING_IDENTITY` for an available stable developer identity. Distribution signing/notarization is not configured. Do not quit during capture/export.

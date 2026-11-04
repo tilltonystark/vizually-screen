@@ -12,3 +12,8 @@ dist/
 *.mp4
 *.mov
 *.framecraft.json
+
+*.vizually.json
+
+# Private feedback exports
+*.feedback.json
