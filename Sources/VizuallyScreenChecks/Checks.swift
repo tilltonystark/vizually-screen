@@ -16,6 +16,7 @@ struct VizuallyScreenChecks {
         try checks.testProjectRoundtripAndValidation()
         try checks.testShortClipAndTrimIntervals()
         try checks.testAppearanceRoundtripAndContrast()
+        checks.testCaptureArea()
         checks.testMotionAndNativePixels()
         try checks.testAutomaticFocusAndMotion()
         try checks.testCanvasBackgrounds()
@@ -24,6 +25,22 @@ struct VizuallyScreenChecks {
         try await checks.testDemoClip()
         try await checks.testActualVideoExport()
         print("PASS: continuous camera/cursor motion, native pixel sizing and padded-frame crop encode/decode, short-clip/trim bounds, model/theme roundtrips and contrast, demo decode, 60 fps trimmed export with audio, cancellation cleanup")
+    }
+    func testCaptureArea() {
+        let size=CGSize(width:1512,height:982)
+        let forward=CaptureArea.selection(from:CGPoint(x:31.2,y:40.4),to:CGPoint(x:620.9,y:390.7),displaySize:size,pixelScale:2)!
+        let reverse=CaptureArea.selection(from:CGPoint(x:620.9,y:390.7),to:CGPoint(x:31.2,y:40.4),displaySize:size,pixelScale:2)!
+        XCTAssertEqual(forward,reverse)
+        XCTAssertEqual(forward,CGRect(x:32,y:41,width:588,height:349))
+        XCTAssertEqual(VideoQuality.nativeSize(points:forward.size,scale:2).0,1176)
+        let edge=CaptureArea.selection(from:CGPoint(x:-20,y:-30),to:CGPoint(x:3000,y:2000),displaySize:size,pixelScale:1)!
+        XCTAssertEqual(edge,CGRect(origin:.zero,size:size))
+        let global=CaptureArea.globalBounds(local:forward,display:CGRect(x:-1512,y:200,width:1512,height:982))
+        XCTAssertEqual(global.origin,CGPoint(x:-1480,y:241))
+        XCTAssertEqual((global.midX-global.minX)/global.width,0.5,accuracy:0.0001)
+        XCTAssertTrue(CaptureArea.selection(from:.zero,to:CGPoint(x:2,y:3),displaySize:size,pixelScale:2) == nil)
+        XCTAssertTrue(CaptureArea.selection(from:CGPoint(x:Double.nan,y:0),to:.zero,displaySize:size,pixelScale:2) == nil)
+        XCTAssertTrue(CaptureArea.selection(from:.zero,to:CGPoint(x:100,y:100),displaySize:size,pixelScale:0) == nil)
     }
     func testRecordingCatalog() throws {
         let root=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
