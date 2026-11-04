@@ -9,7 +9,7 @@ struct WorkspaceView:View {
     @StateObject private var library=RecordingLibrary()
     @EnvironmentObject private var feedback:FeedbackStore
     @EnvironmentObject var theme:StudioTheme
-    @State private var showRecording=false
+    @Binding var showRecording:Bool
     var body:some View {
         Group {
             if editor.showsHome { HomeView(editor:editor,library:library) { showRecording=true } }

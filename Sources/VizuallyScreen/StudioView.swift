@@ -46,12 +46,6 @@ struct StudioView: View {
                 Text(title).font(Geist.font(11)).foregroundStyle(Ink.secondary).lineLimit(1).truncationMode(.middle).help(title).feedbackTarget("editor.title.recording","Recording name")
             }.accessibilityElement(children:.contain).frame(maxWidth: 300, alignment: .leading).feedbackTarget("editor.title","Project title")
             Spacer(minLength: 8)
-            if capture.recording {
-                Button { Task { await capture.stop() } } label: { Label("Stop recording", systemImage: "stop.circle.fill") }
-                    .buttonStyle(StudioButtonStyle(primary: true)).disabled(capture.busy)
-            } else {
-                Button { showRecording = true } label: { Label("Record", systemImage: "record.circle") }.buttonStyle(StudioButtonStyle()).disabled(locked).feedbackTarget("editor.record","Record")
-            }
             IconButton(symbol: "square.and.arrow.down", title: "Import video (⌘I)", action: editor.importVideo).disabled(locked)
             Menu {
                 Button("Open Recording or Project…", action: editor.openProject)
@@ -60,6 +54,12 @@ struct StudioView: View {
                 Divider()
                 Button("Appearance Lab…") { openWindow(id: "appearance-lab") }
             } label: { Image(systemName: "ellipsis").frame(width: 40, height: 40).background(Ink.soft,in:RoundedRectangle(cornerRadius:8)) }.feedbackTarget("editor.actions","Project actions").menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Project actions").disabled(locked)
+            if capture.recording {
+                Button { Task { await capture.stop() } } label: { Label("Stop recording", systemImage: "stop.circle.fill") }
+                    .buttonStyle(StudioButtonStyle(primary: true)).disabled(capture.busy)
+            } else {
+                Button { showRecording = true } label: { Label("Record", systemImage: "record.circle") }.buttonStyle(StudioButtonStyle()).disabled(locked).feedbackTarget("editor.record","Record")
+            }
             Button { showExport=true } label: { HStack(spacing: 8) { Text("Export video"); Image(systemName: "arrow.up.right") } }
                 .buttonStyle(StudioButtonStyle(primary: true)).disabled(editor.project == nil || locked).feedbackTarget("editor.export","Export video")
         }.padding(.leading,StudioLayout.headerLeading).padding(.trailing,20).frame(height:StudioLayout.headerHeight).contentShape(Rectangle()).gesture(WindowDragGesture())

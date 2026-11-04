@@ -33,7 +33,7 @@ P0 means release-blocking core quality. P1 means a valuable next workflow after 
 | Export cancellation / failure | No corrupt result or lost work | P0 | Cancellation cleanup test passes | Unverified | Disk full, cancel and encoder error recover without losing project |
 | Saved projects / reopen | Keep edits between sessions | P0 | Built; legacy format supported | L: library | Save/reopen preserves source, trims, focus, pointer and background |
 | Home / local recording history | Find earlier work | P1 | Built; home thumbnails/open/return observed | U: Open Base; A: library | Old and new sources discoverable; missing file is clear; latest edit reopens |
-| Menu-bar quick recording | One click from any app | P1 | Partial: stop action only | U: Recording / New Capture | Open source selection from menu, stop reliably, no duplicate windows |
+| Menu-bar quick recording | One click from any app | P1 | Start controls, open and stop implemented; release build passed, live cross-app check pending | U: Recording / New Capture | Open source selection from menu, stop reliably, no duplicate windows |
 | Global capture shortcuts | Fast repeat capture | P1 | Not built; in-app shortcuts only | U: several shortcuts | Works while another app focused; collisions and accessibility handled |
 | Capture tray | Retrieve recent captures quickly | P2 | Not built | U: Capture Tray | Validate whether home + menu recents already meet need |
 | Screenshot capture | Quick visual communication | P1, after recording gates | Not built | U: Screenshot | Native pixels, correct source and fast save/copy; separate from video pipeline |
@@ -63,7 +63,7 @@ The A rows summarize advertised features from the [official Shotbase page](https
 2. **Motion checkpoint — pushed:** smoothing, automatic editable focus, continuous camera ramps. Gate: identical source gestures and matched Shotbase output review. Mathematical continuity alone does not establish pleasant motion.
 3. **Workspace checkpoint — pushed (342bf61); follow-up polish in progress:** rename, aligned header, backgrounds, home/reopen, pinned app feedback. Gate: normal capture → edit → home → reopen → export plus feedback save/reopen. Commit and push with evidence and explicit remaining gaps.
 4. **Core quality release — next:** fix defects found by the matched comparison before new capture types. Gate: native detail, timing, audio, permission and endurance matrix below.
-5. **Quick-access release — proposed, not started:** useful menu-bar start/open actions and global shortcuts. Gate: complete capture from another foreground app; no project loss. Discuss scope after quality results.
+5. **Quick access — partial:** menu-bar start/open actions now implemented; global shortcuts remain deferred. Gate still pending: complete capture from another foreground app without project loss. Cmd+N opens recording controls only while the app is focused.
 6. **Screenshot workflow — candidate:** capture plus focused annotation, followed only by capabilities supported by actual demand. Do not start scrolling/web/OCR/AI as one broad parity project.
 
 Intervals are shippable checkpoints, not dates or feature-count targets. A failed P0 gate stops breadth work. Record any reprioritization here with its reason.
