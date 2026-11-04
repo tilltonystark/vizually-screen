@@ -7,7 +7,7 @@ func XCTAssertTrue(_ value: Bool, file: StaticString = #file, line: UInt = #line
 func XCTAssertEqual<T: Equatable>(_ lhs: T, _ rhs: T) { precondition(lhs == rhs, "Expected \(lhs) == \(rhs)") }
 func XCTAssertEqual(_ lhs: Double, _ rhs: Double, accuracy: Double) { precondition(abs(lhs - rhs) <= accuracy, "Expected \(lhs) ≈ \(rhs)") }
 func XCTAssertGreaterThan(_ lhs: Int, _ rhs: Int) { precondition(lhs > rhs) }
-func XCTAssertThrowsError(_ action: @autoclosure () throws -> Void) { do { try action(); fatalError("Expected validation to throw") } catch {} }
+func XCTAssertThrowsError<T>(_ action: @autoclosure () throws -> T) { do { _ = try action(); fatalError("Expected validation to throw") } catch {} }
 @main
 struct VizuallyScreenChecks {
     static func main() async throws {
@@ -21,6 +21,7 @@ struct VizuallyScreenChecks {
         try checks.testAutomaticFocusAndMotion()
         try checks.testCanvasBackgrounds()
         try checks.testRecordingCatalog()
+        try checks.testRecordingManagement()
         try await checks.testCaptureContentBounds()
         try await checks.testDemoClip()
         try await checks.testActualVideoExport()
@@ -76,6 +77,59 @@ struct VizuallyScreenChecks {
         let restored=try JSONDecoder().decode(Project.self,from:Data(contentsOf:URL(fileURLWithPath:found[1].projectPath!)))
         XCTAssertEqual(restored.zooms,project.zooms)
         XCTAssertEqual(RecordingCatalog.scan(roots:[root.appendingPathComponent("absent")],recent:[]).count,0)
+    }
+    func testRecordingManagement() throws {
+        let fm=FileManager.default,root=fm.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent(UUID().uuidString)
+        try fm.createDirectory(at:root,withIntermediateDirectories:true)
+        defer { try? fm.removeItem(at:root) }
+        let source=root.appendingPathComponent("source.mov"),indexURL=root.appendingPathComponent("library.json")
+        let original=Data("Disposable test video bytes".utf8)
+        try original.write(to:source)
+        let sidecar=ProjectFiles.sidecar(for:source),edit=Data("Retained edit bytes".utf8)
+        try edit.write(to:sidecar)
+        let index=RecordingIndex(url:indexURL),entry=RecordingReference(sourcePath:source.path,projectPath:sidecar.path)
+        try index.write([entry])
+        XCTAssertEqual(try index.read()[0].displayName,"source") // Legacy records have no title field.
+        let renamed=try index.rename(entry,to:"  Product walkthrough  ")
+        XCTAssertEqual(renamed[0].displayName,"Product walkthrough")
+        XCTAssertEqual(renamed[0].sourcePath,source.path)
+        XCTAssertEqual(renamed[0].projectPath,sidecar.path)
+        XCTAssertEqual(try Data(contentsOf:source),original);XCTAssertEqual(try Data(contentsOf:sidecar),edit)
+        XCTAssertEqual(RecordingCatalog.scan(roots:[root],recent:try index.read())[0].displayName,"Product walkthrough")
+        XCTAssertThrowsError(try index.rename(entry,to:"  "))
+        XCTAssertThrowsError(try index.rename(entry,to:"First\nSecond"))
+        XCTAssertThrowsError(try index.rename(entry,to:String(repeating:"x",count:161)))
+        XCTAssertEqual(try index.read()[0].displayName,"Product walkthrough")
+        let trash=root.appendingPathComponent("TestTrash")
+        try fm.createDirectory(at:trash,withIntermediateDirectories:true)
+        let destination=trash.appendingPathComponent(source.lastPathComponent)
+        let result=try index.remove(entry,trash:{ url in try fm.moveItem(at:url,to:destination);return destination },restore:{ try fm.moveItem(at:$0,to:$1) })
+        XCTAssertTrue(result.isEmpty);XCTAssertTrue(!fm.fileExists(atPath:source.path));XCTAssertTrue(fm.fileExists(atPath:destination.path))
+        XCTAssertEqual(try Data(contentsOf:sidecar),edit)
+        XCTAssertTrue(RecordingCatalog.scan(roots:[root],recent:try index.read()).isEmpty)
+        try fm.moveItem(at:destination,to:source)
+        try index.write(renamed)
+        XCTAssertThrowsError(try index.remove(entry,trash:{ _ in throw CocoaError(.fileWriteNoPermission) },restore:{ _,_ in }))
+        XCTAssertTrue(fm.fileExists(atPath:source.path));XCTAssertEqual(try index.read(),renamed)
+        // Simulate an index-write failure after moving media; ensure the media is restored.
+        let backup=root.appendingPathComponent("index-backup.json")
+        var restored=false
+        XCTAssertThrowsError(try index.remove(entry,trash:{ url in
+            try fm.moveItem(at:url,to:destination)
+            try fm.moveItem(at:indexURL,to:backup)
+            try fm.createDirectory(at:indexURL,withIntermediateDirectories:false)
+            return destination
+        },restore:{ trashed,original in try fm.moveItem(at:trashed,to:original);restored=true }))
+        XCTAssertTrue(restored);XCTAssertEqual(try Data(contentsOf:source),original)
+        try fm.removeItem(at:indexURL);try fm.moveItem(at:backup,to:indexURL)
+        // An unavailable entry is removed without attempting to trash a different file.
+        try fm.moveItem(at:source,to:destination)
+        var calledTrash=false
+        XCTAssertTrue(try index.remove(entry,trash:{ _ in calledTrash=true;return destination },restore:{ _,_ in }).isEmpty)
+        XCTAssertTrue(!calledTrash)
+        let corrupt=Data("broken index".utf8);try corrupt.write(to:indexURL)
+        XCTAssertThrowsError(try index.rename(entry,to:"New title"))
+        XCTAssertEqual(try Data(contentsOf:indexURL),corrupt)
     }
     func testZoomIsContinuousAndReturnsToOriginal() {
         let z = Zoom(start: 2, duration: 3)

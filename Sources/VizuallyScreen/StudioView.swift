@@ -14,7 +14,7 @@ struct StudioView: View {
     @State private var inspectorTab = "Canvas"
     @State private var dropTargeted = false
     private var locked: Bool { editor.busy || capture.recording || capture.busy }
-    private var title: String { editor.project.map { URL(fileURLWithPath: $0.sourcePath).deletingPathExtension().lastPathComponent } ?? "Untitled project" }
+    private var title: String { editor.recordingTitle ?? editor.project.map { URL(fileURLWithPath: $0.sourcePath).deletingPathExtension().lastPathComponent } ?? "Untitled project" }
     var body: some View {
         VStack(spacing: 0) {
             toolbar.feedbackTarget("editor.header","Editor header")

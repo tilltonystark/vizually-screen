@@ -3,9 +3,11 @@ import Foundation
 package struct RecordingReference:Codable,Identifiable,Equatable {
     package var sourcePath:String
     package var projectPath:String?
+    package var title:String?
+    package var displayName:String { title ?? URL(fileURLWithPath:sourcePath).deletingPathExtension().lastPathComponent }
     package var updated:Date
     package var id:String { sourcePath }
-    package init(sourcePath:String,projectPath:String? = nil,updated:Date = Date()) { self.sourcePath=sourcePath;self.projectPath=projectPath;self.updated=updated }
+    package init(sourcePath:String,projectPath:String? = nil,updated:Date = Date(),title:String?=nil) { self.sourcePath=sourcePath;self.projectPath=projectPath;self.updated=updated;self.title=title }
 }
 package enum RecordingCatalog {
     package static func scan(roots:[URL],recent:[RecordingReference]) -> [RecordingReference] {

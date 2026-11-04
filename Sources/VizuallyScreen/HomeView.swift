@@ -34,8 +34,11 @@ struct HomeView:View {
     let record:()->Void
     @EnvironmentObject var theme:StudioTheme
     @State private var query=""
+    @State private var renameEntry:RecordingReference?
+    @State private var renameTitle=""
+    @State private var deleteEntry:RecordingReference?
     @FocusState private var recordFocused:Bool
-    private var filtered:[RecordingReference] { library.entries.filter { query.isEmpty || URL(fileURLWithPath:$0.sourcePath).lastPathComponent.localizedCaseInsensitiveContains(query) } }
+    private var filtered:[RecordingReference] { library.entries.filter { query.isEmpty || $0.displayName.localizedCaseInsensitiveContains(query) } }
     var body:some View {
         VStack(spacing:0) {
             HStack(spacing:12) {
@@ -84,6 +87,21 @@ struct HomeView:View {
             }
         }.background(.white).background(WindowChrome()).disabled(editor.busy)
         .defaultFocus($recordFocused,true)
+        .alert("Rename recording",isPresented:Binding(get:{renameEntry != nil},set:{if !$0 {renameEntry=nil}})) {
+            TextField("Recording title",text:$renameTitle)
+            Button("Save") { if let entry=renameEntry { library.rename(entry,to:renameTitle) };renameEntry=nil }
+                .disabled(renameTitle.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
+            Button("Cancel",role:.cancel) { renameEntry=nil }
+        }
+        .confirmationDialog("Remove recording?",isPresented:Binding(get:{deleteEntry != nil},set:{if !$0 {deleteEntry=nil}}),titleVisibility:.visible,presenting:deleteEntry) { entry in
+            Button(FileManager.default.fileExists(atPath:entry.sourcePath) ? "Move to Trash":"Remove from library",role:.destructive) {
+                if library.trash(entry) { editor.forgetRecording(entry.sourcePath) }
+                deleteEntry=nil
+            }
+            Button("Cancel",role:.cancel) { deleteEntry=nil }
+        } message: { entry in
+            Text(FileManager.default.fileExists(atPath:entry.sourcePath) ? "Move “\(entry.displayName)” to Trash? This moves the original video. Saved edit files stay on this Mac.":"Remove the unavailable recording “\(entry.displayName)” from this library?")
+        }
     }
     private func sidebarItem(_ title:String,symbol:String,id:String,selected:Bool = false,action:@escaping ()->Void) -> some View {
         Button(action:action) { HStack(spacing:8) { Image(systemName:symbol).frame(width:16);Text(title) } }
@@ -101,13 +119,28 @@ struct HomeView:View {
                     if let detail,detail.error == nil { Text(clockText(detail.duration)).font(Geist.font(11,.medium)).monospacedDigit().padding(6).foregroundStyle(.white).background(.black.opacity(0.7),in:RoundedRectangle(cornerRadius:5)).padding(10) }
                 }.aspectRatio(16/10,contentMode:.fit).clipped()
                 VStack(alignment:.leading,spacing:7) {
-                    Text(URL(fileURLWithPath:entry.sourcePath).deletingPathExtension().lastPathComponent).font(StudioType.controlLabel).foregroundStyle(Ink.primary).lineLimit(1).truncationMode(.middle)
+                    Text(entry.displayName).font(StudioType.controlLabel).foregroundStyle(Ink.primary).lineLimit(1).truncationMode(.middle)
                     HStack { Text(entry.updated,style:.date);Spacer();Text(detail?.error ?? (entry.projectPath == nil ? "Original":"Saved edit")) }.font(Geist.font(11)).foregroundStyle(detail?.error == nil ? Ink.secondary:.red)
                 }.padding(14).frame(maxWidth:.infinity,alignment:.leading)
             }.background(.white).clipShape(RoundedRectangle(cornerRadius:10)).overlay { RoundedRectangle(cornerRadius:10).strokeBorder(.black.opacity(0.07),lineWidth:0.5) }
-        }.buttonStyle(.plain).disabled(detail?.error != nil).accessibilityLabel("Open \(URL(fileURLWithPath:entry.sourcePath).deletingPathExtension().lastPathComponent)")
-            .feedbackTarget("library.recording.\(SHA256.hash(data:Data(entry.id.utf8)).prefix(8).map { String(format:"%02x",$0) }.joined())", "Recording: \(URL(fileURLWithPath:entry.sourcePath).lastPathComponent)")
-            .contextMenu { Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath:entry.sourcePath)]) } }
+        }.buttonStyle(.plain).disabled(detail?.error != nil).accessibilityLabel("Open \(entry.displayName)")
+            .feedbackTarget("library.recording.\(SHA256.hash(data:Data(entry.id.utf8)).prefix(8).map { String(format:"%02x",$0) }.joined())", "Recording: \(entry.displayName)")
+            .contextMenu { recordingActions(entry) }
+            .overlay(alignment:.topTrailing) {
+                Menu { recordingActions(entry) } label: {
+                    Image(systemName:"ellipsis").font(Geist.font(14,.medium)).foregroundStyle(Ink.primary).frame(width:36,height:36)
+                        .background(.white,in:RoundedRectangle(cornerRadius:8)).overlay(RoundedRectangle(cornerRadius:8).strokeBorder(Ink.line,lineWidth:0.5))
+                }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().padding(8)
+                    .accessibilityLabel("Actions for \(entry.displayName)")
+                    .feedbackTarget("library.actions.\(SHA256.hash(data:Data(entry.id.utf8)).prefix(8).map { String(format:"%02x",$0) }.joined())","Recording actions: \(entry.displayName)")
+            }
             .task { await library.loadDetails(entry) }
     }
+    @ViewBuilder private func recordingActions(_ entry:RecordingReference) -> some View {
+        Button("Rename…") { renameTitle=entry.displayName;renameEntry=entry }
+        Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath:entry.sourcePath)]) }
+        Divider()
+        Button(FileManager.default.fileExists(atPath:entry.sourcePath) ? "Move to Trash…":"Remove from library…",role:.destructive) { deleteEntry=entry }
+    }
+
 }

@@ -1,0 +1,13 @@
+# Home recording management — November5
+
+User approved rename, recoverable delete, then hosted-sharing assessment.
+
+Each Home card has a visible ellipsis menu and right-click actions: Rename…, Reveal in Finder, Move to Trash…. Missing-source entries offer Remove from library…. The rename dialog changes a local display title, not the original filename. Search and editor headers use that title. Titles are optional in library.json, preserving old index decoding. Subsequent recent-entry registration retains the title.
+
+Move to Trash confirms that the original video will move and saved edit files remain. Foundation's native trashItem API returns the recoverable destination. Removing its index entry also clears a matching loaded editor so later autosave cannot re-register a deleted recording. Saved edit/source paths are not rewritten. If an index write fails after the move, restoration is attempted; a failed restoration explicitly reports the video is in Trash. No permanent deletion is implemented. Imported originals outside app folders can also be moved to Trash, as the confirmation states.
+
+Library refresh also scans stored working-copy projects, allowing source/edit associations to be rediscovered when originals in the normal Movies roots are restored. Restoring imported files elsewhere may require reopening them. Display titles removed from the library are not guaranteed to survive a later Finder restoration/import.
+
+Verification: release build passes; storage behavior checks pass with disposable files for title persistence/validation, legacy title-less indexes, unchanged source/edit data, scan title preservation, index removal, missing-source removal, Trash failure, post-move index-write failure rollback and corrupt-index preservation. Existing full media checks pass. No user's real recording was trashed. Native end-to-end menu/dialog test is pending because the Mac locked; unlock requested. Test only a generated recording when available.
+
+Public sharing is not implemented by these menus. Assessment: [public-sharing-feasibility.md](public-sharing-feasibility.md).

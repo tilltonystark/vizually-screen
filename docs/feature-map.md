@@ -1,6 +1,6 @@
 # Vizually Screen: feature universe and release gates
 
-Updated 2026-11-04. This is a working inventory, not a claim of complete competitor coverage or parity. No percentage complete is meaningful until the quality gates below have been measured. The recording pipeline is implemented; matched Shotbase output quality is **unverified**.
+Updated 2026-11-05. This is a working inventory, not a claim of complete competitor coverage or parity. No percentage complete is meaningful until the quality gates below have been measured. The recording pipeline is implemented; matched Shotbase output quality is **unverified**.
 
 ## Evidence and interpretation
 
@@ -33,12 +33,14 @@ P0 means release-blocking core quality. P1 means a valuable next workflow after 
 | Export cancellation / failure | No corrupt result or lost work | P0 | Cancellation cleanup test passes | Unverified | Disk full, cancel and encoder error recover without losing project |
 | Saved projects / reopen | Keep edits between sessions | P0 | Built; legacy format supported | L: library | Save/reopen preserves source, trims, focus, pointer and background |
 | Home / local recording history | Find earlier work | P1 | Built; home thumbnails/open/return observed | U: Open Base; A: library | Old and new sources discoverable; missing file is clear; latest edit reopens |
+| Library rename / Trash | Manage past recordings | P1 (user requested) | Built: titles preserve paths, confirmed Trash/removal; storage/rollback tests pass; native UI check blocked by locked Mac | Unverified | Rename survives reload/search/editor; Trash recoverable, no stale reappearance or lost edit associations |
+| Public playback links / guest feedback | Share a demo for timestamped feedback | P1, separate hosted milestone | Feasibility assessed; no backend or public uploads; not built | User Loom reference (not Shotbase evidence) | Explicit publish, browser-compatible export, revoke/delete, persistent timestamped comments/reactions and guest abuse controls |
 | Menu-bar quick recording | One click from any app | P1 | Start controls, open and stop implemented; release build passed, live cross-app check pending | U: Recording / New Capture | Open source selection from menu, stop reliably, no duplicate windows |
 | Global capture shortcuts | Fast repeat capture | P1 | Not built; in-app shortcuts only | U: several shortcuts | Works while another app focused; collisions and accessibility handled |
 | Capture tray | Retrieve recent captures quickly | P2 | Not built | U: Capture Tray | Validate whether home + menu recents already meet need |
 | Screenshot capture | Quick visual communication | P1, after recording gates | Not built | U: Screenshot | Native pixels, correct source and fast save/copy; separate from video pipeline |
 | Screenshot annotation | Highlight a point quickly | P1, after screenshot capture | Not built | A: arrows, text, highlights, shapes | Crisp text, undo, editable placement and exported alignment |
-| Area capture | Restrict capture to a region | P0 (user requested) | Area diagram and native1402×1214 crop verified; outside-area dimming masks replace failed thin border; active picker reset guards and geometry/media checks pass; live dimming/cursor/mixed-DPI checks remain | U: Area | Accurate Retina/cursor coordinates, cancel preserves source. One display per selection; macOS15.2+; spanning displays deferred |
+| Area capture | Restrict capture to a region | P0 (user requested) | Area diagram and native1402×1214 crop verified; outside-area dimming masks replace failed thin border; user confirmed dimming persists throughout capture and clears on Stop; cursor/mixed-DPI edge checks remain | U: Area | Accurate Retina/cursor coordinates, cancel preserves source. One display per selection; macOS15.2+; spanning displays deferred |
 | Scrolling screenshot | Long documentation | P2 | Not built | A | Stitching has no repeated or missing rows; establish demand first |
 | Web-page capture | Long page or viewport | P2 | Not built | U; A: full-page/viewport | Font/layout fidelity, lazy-loading and private page handling |
 | Text extraction | Copy otherwise inaccessible text | P2 | Not built | U: Text | OCR accuracy across scales/languages; never claim recording improvement |

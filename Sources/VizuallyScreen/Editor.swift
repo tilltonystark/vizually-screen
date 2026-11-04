@@ -7,6 +7,7 @@ import CryptoKit
 @MainActor
 final class Editor: ObservableObject {
     @Published var project: Project?
+    @Published var recordingTitle:String?
     @Published var showsHome=true
     var onLibraryChange:((URL,URL?)->Void)?
     private var activeProjectURL:URL?
@@ -49,7 +50,7 @@ final class Editor: ObservableObject {
             Task { @MainActor in self?.isPlaying = playing }
         }
     }
-    func load(_ url: URL, saved: Project? = nil,projectURL:URL? = nil) async {
+    func load(_ url: URL, saved: Project? = nil,projectURL:URL? = nil,title:String?=nil) async {
         guard !busy else { return }
         guard persistWorkingCopy() else { return }
         let generation = UUID()
@@ -95,7 +96,7 @@ final class Editor: ObservableObject {
             renderState=state
             player.pause()
             // Commit only after validation and staging; failed loads preserve the current edit.
-            self.asset = asset; self.duration = duration; self.project = project
+            self.asset = asset; self.duration = duration; self.project = project;recordingTitle=title
             activeProjectURL=sidecar;hasChanges=false;showsHome=false
             onLibraryChange?(url,sidecar)
             self.videoSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
@@ -268,9 +269,17 @@ final class Editor: ObservableObject {
         if let path=entry.projectPath,FileManager.default.fileExists(atPath:path) {
             do {
                 var saved=try JSONDecoder().decode(Project.self,from:Data(contentsOf:URL(fileURLWithPath:path)));saved.sourcePath=url.path
-                Task { await load(url,saved:saved,projectURL:URL(fileURLWithPath:path)) }
+                Task { await load(url,saved:saved,projectURL:URL(fileURLWithPath:path),title:entry.title) }
             } catch { self.error="Could not open this saved edit: \(error.localizedDescription)" }
-        } else { Task { await load(url) } }
+        } else { Task { await load(url,title:entry.title) } }
+    }
+    func forgetRecording(_ sourcePath:String) {
+        guard let project,RecordingIndex.canonical(project.sourcePath) == RecordingIndex.canonical(sourcePath),!busy else { return }
+        loadGeneration=UUID();seekGeneration=UUID();previewRefresh?.cancel();previewRefresh=nil
+        player.pause();player.replaceCurrentItem(with:nil)
+        self.project=nil;recordingTitle=nil;asset=nil;renderState=nil;activeProjectURL=nil;hasChanges=false
+        thumbnails=[];duration=0;playhead=0;videoSize = .zero;sourceFrameRate=0;selectedZoomID=nil
+        pendingSeek=nil;seeking=false;isPlaying=false;showsHome=true;message="Ready when you are."
     }
     func export(quality: VideoQuality = .high) {
         guard let project, let asset else { return }

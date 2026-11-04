@@ -14,20 +14,44 @@ final class RecordingLibrary:ObservableObject {
     private var loadingDetails=Set<String>()
     static var support:URL { FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("Vizually Screen") }
     private var index:URL { Self.support.appendingPathComponent("library.json") }
-    init() { if let data=try? Data(contentsOf:index),let saved=try? JSONDecoder().decode([RecordingReference].self,from:data) { recent=saved } }
+    private var storage:RecordingIndex { RecordingIndex(url:index) }
+    init() { do { recent=try storage.read() } catch { self.error="Could not read the recording library: \(error.localizedDescription)" } }
     func register(_ source:URL,project:URL?) {
         guard !source.lastPathComponent.contains("studio-demo-") else { return }
-        recent.removeAll { $0.sourcePath == source.path }
-        recent.insert(RecordingReference(sourcePath:source.path,projectPath:project?.path),at:0)
         do {
-            try FileManager.default.createDirectory(at:Self.support,withIntermediateDirectories:true)
-            try JSONEncoder().encode(recent).write(to:index,options:.atomic)
+            let key=RecordingIndex.canonical(source.path)
+            var updated=try storage.read()
+            let title=updated.first(where:{RecordingIndex.canonical($0.sourcePath) == key})?.title
+            updated.removeAll { RecordingIndex.canonical($0.sourcePath) == key }
+            updated.insert(RecordingReference(sourcePath:key,projectPath:project?.path,title:title),at:0)
+            try storage.write(updated);recent=updated
         } catch { self.error="Could not save recent recordings: \(error.localizedDescription)" }
+    }
+    func rename(_ entry:RecordingReference,to title:String) {
+        do {
+            recent=try storage.rename(entry,to:title)
+            generation=UUID();loading=false
+            if let index=entries.firstIndex(where:{$0.id == entry.id}),let updated=recent.first(where:{$0.id == entry.id}) { entries[index]=updated }
+            error=nil
+        } catch { self.error="Could not rename recording: \(error.localizedDescription)" }
+    }
+    @discardableResult func trash(_ entry:RecordingReference) -> Bool {
+        do {
+            recent=try storage.remove(entry,trash:{ source in
+                var result:NSURL?
+                try FileManager.default.trashItem(at:source,resultingItemURL:&result)
+                guard let result else { throw CocoaError(.fileWriteUnknown) }
+                return result as URL
+            },restore:{ trashed,source in try FileManager.default.moveItem(at:trashed,to:source) })
+            generation=UUID();loading=false
+            entries.removeAll { $0.id == entry.id };details[entry.id]=nil
+            error=nil;return true
+        } catch { self.error="Could not remove recording: \(error.localizedDescription)";return false }
     }
     func refresh() async {
         let token=UUID();generation=token;loading=true
         let movies=FileManager.default.urls(for:.moviesDirectory,in:.userDomainMask)[0]
-        let roots=[movies.appendingPathComponent("Vizually Screen"),movies.appendingPathComponent("Framecraft")]
+        let roots=[movies.appendingPathComponent("Vizually Screen"),movies.appendingPathComponent("Framecraft"),Self.support.appendingPathComponent("Projects")]
         let recent=self.recent
         let found=await Task.detached(priority:.userInitiated) { RecordingCatalog.scan(roots:roots,recent:recent) }.value
         guard generation == token else { return }
