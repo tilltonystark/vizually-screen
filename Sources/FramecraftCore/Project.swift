@@ -7,10 +7,11 @@ package struct Zoom: Codable, Identifiable, Equatable {
     package var scale: Double = 1.8
     package var x: Double = 0.5
     package var y: Double = 0.5
-    package init(id: UUID = UUID(), start: Double, duration: Double = 3, scale: Double = 1.8, x: Double = 0.5, y: Double = 0.5) { self.id = id; self.start = start; self.duration = duration; self.scale = scale; self.x = x; self.y = y }
+    package var automatic: Bool? = nil
+    package init(id: UUID = UUID(), start: Double, duration: Double = 3, scale: Double = 1.8, x: Double = 0.5, y: Double = 0.5, automatic:Bool = false) { self.id = id; self.start = start; self.duration = duration; self.scale = scale; self.x = x; self.y = y;self.automatic=automatic ? true:nil }
     package func amount(at time: Double) -> Double {
         guard duration > 0, time >= start, time <= start + duration else { return 0 }
-        let ramp = min(0.6, duration / 2)
+        let ramp = min(0.85, duration / 2)
         let t = min(1, min((time - start) / ramp, (start + duration - time) / ramp))
         return Motion.ease(t)
     }
@@ -25,6 +26,7 @@ package struct Project: Codable {
     package var background: String = "Lavender"
     package var zooms: [Zoom] = []
     package var cursorSamples: [CursorSample]? = nil
+    package var pointerSmoothing: PointerSmoothing? = nil
     package init(sourcePath: String, trimStart: Double = 0, trimEnd: Double) { self.sourcePath = sourcePath; self.trimStart = trimStart; self.trimEnd = trimEnd }
     package static func minimumEditableInterval(duration: Double) -> Double {
         duration.isFinite && duration > 0 ? min(0.1, duration) : 0

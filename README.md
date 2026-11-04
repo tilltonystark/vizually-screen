@@ -40,3 +40,7 @@ Manual zooms; arrow-only cursor reconstruction; SDR pipeline. Automated click-ba
 Builds are ad-hoc signed locally. For a stable signing identity, set `FRAMECRAFT_SIGNING_IDENTITY` when running the build script; signing/notarization for distribution is not configured. See [HANDOFF.md](HANDOFF.md) before continuing development.
 
 Source-fit regression evidence and limits: [review](docs/source-fit-review.md). The approved next checkpoints are in [milestones](docs/briefs/2026-11-03-vizually-screen-milestones.md).
+
+## Cursor-led motion (v0.4)
+
+New recordings can add editable automatic zooms where the pointer settles. In Zoom, choose Recorded, Smooth or Extra smooth pointer motion, or use Auto focus to refresh suggestions. Manual zooms are preserved. This requires a separate pointer track; older baked cursors cannot be reconstructed. [Motion evidence and limits](docs/motion-focus-review.md).

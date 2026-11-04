@@ -35,3 +35,5 @@ Inspector: Canvas/Zoom tabs → grouped source-preserving controls. No source di
 ## Scope of this check
 
 The existing studio predates strict layout/type token layers and still has raw spacing/font calls. This checkpoint adds semantic tokens for shared help, not a claim that the whole app is token-clean. New header/home/background work must reuse these components and document additional roles here. Do not silently invent variants.
+
+Pointer motion controls use Recorded, Smooth, Extra smooth; these change the separately rendered arrow only. Auto focus refreshes generated suggestions, never manual regions. Editing a generated region promotes it to manual. No click or gaze inference is implied by “focus.”

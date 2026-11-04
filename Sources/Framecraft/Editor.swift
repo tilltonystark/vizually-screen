@@ -22,6 +22,7 @@ final class Editor: ObservableObject {
     let player = AVPlayer()
     private var asset: AVURLAsset?
     private var renderState: RenderState?
+    private var previewRefresh:Task<Void,Never>?
     private var pendingSeek: Double?
     private var observer: Any?
     private var playbackObservation: NSKeyValueObservation?
@@ -93,34 +94,46 @@ final class Editor: ObservableObject {
             self.thumbnails = images
             self.selectedZoomID = project.zooms.first?.id
             self.isPlaying = false
+            previewRefresh?.cancel();previewRefresh=nil
             seekGeneration=UUID();seeking=false;pendingSeek=nil
             player.replaceCurrentItem(with: item)
             seek(project.trimStart)
             message = url.lastPathComponent
         } catch { self.error = error.localizedDescription; message = previousMessage }
     }
-    func loadRecording(_ result: CaptureResult) async {
+    func loadRecording(_ result: CaptureResult,automaticZoom:Bool = true) async {
+        guard !busy else { error="Recording saved. Import it when the current action finishes.";return }
+        busy=true;message="Preparing recording…"
         let asset = AVURLAsset(url:result.url)
         do {
             var p=Project(sourcePath:result.url.path,trimEnd:try await asset.load(.duration).seconds)
             p.cursorSamples=result.samples
+            if automaticZoom,let samples=result.samples {
+                let end=p.trimEnd
+                p.zooms=await Task.detached(priority:.userInitiated) { AutoFocus.suggest(samples:samples,start:0,end:end) }.value
+            }
             let encoder=JSONEncoder();encoder.outputFormatting=[.prettyPrinted,.sortedKeys]
             try encoder.encode(p).write(to:result.url.deletingPathExtension().appendingPathExtension("framecraft.json"),options:.atomic)
-            await load(result.url,saved:p)
+            busy=false;await load(result.url,saved:p)
             message="Recording saved · \(result.dropped) dropped frames"
-        } catch { self.error=error.localizedDescription }
+        } catch { busy=false;self.error=error.localizedDescription }
     }
     func loadDemo() async {
         guard !busy else { return }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Framecraft-studio-demo-v2.mp4")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Framecraft-studio-demo-v3.mp4")
         busy = true
         message = "Preparing demo…"
         do {
-            if !FileManager.default.fileExists(atPath: url.path) { try await DemoClip.create(at: url) }
+            if !FileManager.default.fileExists(atPath: url.path) { try await DemoClip.create(at: url,includePointer:false) }
             busy = false
             var demo = Project(sourcePath: url.path, trimEnd: 8)
             demo.padding=0.07
-            demo.zooms = [Zoom(start: 1.2, duration: 2.4, scale: 1.65, x: 0.65, y: 0.42), Zoom(start: 4.8, duration: 2.2, scale: 1.9, x: 0.73, y: 0.65)]
+            demo.cursorSamples=(0...960).map { i in
+                let t=Double(i)/120
+                let phase=min(1,max(0,(t-1)/0.4)),second=min(1,max(0,(t-4)/0.4))
+                return CursorSample(time:t,x:0.35+0.45*phase-0.15*second,y:0.5-0.2*phase+0.35*second)
+            }
+            demo.zooms=AutoFocus.suggest(samples:demo.cursorSamples!,start:0,end:8)
             await load(url, saved: demo)
         } catch { busy = false; self.error = error.localizedDescription }
     }
@@ -153,8 +166,21 @@ final class Editor: ObservableObject {
         project = p
         if let selectedZoomID, !p.zooms.contains(where: { $0.id == selectedZoomID }) { self.selectedZoomID = nil }
         renderState?.update(p)
-        // Re-seek to render changes while paused.
-        seek(playhead)
+        // AVPlayer caches paused frames. A new composition identity invalidates
+        // that frame without rebuilding the filter graph on every slider event.
+        // During playback shared parameters are read on the next frame; no seek.
+        if player.rate == 0,previewRefresh == nil {
+            let generation=loadGeneration
+            previewRefresh=Task { @MainActor in
+                try? await Task.sleep(for:.milliseconds(16))
+                guard !Task.isCancelled,generation == loadGeneration else { return }
+                previewRefresh=nil
+                if let item=player.currentItem,let composition=item.videoComposition {
+                    item.videoComposition=composition.mutableCopy() as? AVVideoComposition
+                }
+                seek(playhead)
+            }
+        }
     }
     func seek(_ seconds: Double) {
         guard project != nil,seconds.isFinite else { return }
@@ -178,6 +204,18 @@ final class Editor: ObservableObject {
         guard !busy, let zoom = project?.newZoom(at: playhead) else { return }
         update { $0.zooms.append(zoom) }
         selectedZoomID = zoom.id
+    }
+    func suggestZooms() {
+        guard let p=project,let samples=p.cursorSamples,!busy else { return }
+        busy=true;message="Finding focus moments…"
+        Task {
+            let suggestions=await Task.detached(priority:.userInitiated) { AutoFocus.suggest(samples:samples,start:p.trimStart,end:p.trimEnd) }.value
+            let zooms=AutoFocus.merge(suggestions,with:p.zooms)
+            busy=false;update { $0.zooms=zooms }
+            let automatic=zooms.filter { $0.automatic == true }
+            selectedZoomID=automatic.first?.id ?? p.zooms.first?.id
+            message=automatic.isEmpty ? "No new focus moments. Manual zooms preserved.":"\(automatic.count) automatic zooms · Manual zooms preserved"
+        }
     }
     func selectZoom(_ id: UUID) {
         guard !busy, let zoom = project?.zooms.first(where: { $0.id == id }) else { return }

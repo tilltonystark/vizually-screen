@@ -10,6 +10,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     @Published var picking=false
     @Published var systemAudio=true
     @Published var smoothCursor=true
+    @Published var automaticZoom=true
     @Published var quality: VideoQuality = .efficient
     @Published var error: String?
     @Published var sourceSummary="No source selected"

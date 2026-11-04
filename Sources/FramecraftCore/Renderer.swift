@@ -5,9 +5,18 @@ import CoreGraphics
 package final class RenderState: @unchecked Sendable {
     private let lock=NSLock()
     private var value: Project
-    package init(_ project:Project) { value=project }
+    private var smoothing:PointerSmoothing
+    package init(_ project:Project) {
+        value=project;smoothing=project.pointerSmoothing ?? .smooth
+        value.cursorSamples=project.cursorSamples.map { Motion.smooth($0,sigma:smoothing.sigma) }
+    }
     package var project:Project { lock.lock();defer{lock.unlock()};return value }
-    package func update(_ project:Project) { lock.lock();value=project;lock.unlock() }
+    package func update(_ project:Project) {
+        lock.lock();defer { lock.unlock() }
+        let setting=project.pointerSmoothing ?? .smooth
+        let samples=setting == smoothing && project.cursorSamples?.count == value.cursorSamples?.count ? value.cursorSamples:project.cursorSamples.map { Motion.smooth($0,sigma:setting.sigma) }
+        value=project;value.cursorSamples=samples;smoothing=setting
+    }
 }
 package enum Renderer {
     package static let palettes: [String: (CIColor, CIColor)] = [
@@ -17,8 +26,9 @@ package enum Renderer {
         "Midnight": (CIColor(red: 0.20, green: 0.23, blue: 0.30), CIColor(red: 0.06, green: 0.07, blue: 0.10))
     ]
     package static func composition(asset: AVAsset, project: Project, state: RenderState? = nil) -> AVVideoComposition {
+        let state=state ?? RenderState(project)
         let composition = AVVideoComposition(asset: asset) { request in
-            let project=state?.project ?? project
+            let project=state.project
             let source = request.sourceImage
             let rect = source.extent
             let z = project.zoom(at: request.compositionTime.seconds)

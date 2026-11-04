@@ -87,9 +87,22 @@ struct StudioInspector: View {
     @ViewBuilder private var zoomControls: some View {
         heading("Focus the details", detail: "Add a zoom at the playhead, then choose where it looks.")
         Button(action: editor.addZoom) { Label("Add zoom", systemImage: "plus") }.buttonStyle(StudioButtonStyle()).disabled(editor.project == nil)
+        if let p=editor.project, p.cursorSamples?.isEmpty == false {
+            HStack {
+                Text("Pointer motion").font(StudioType.controlLabel)
+                InfoHint(title:"Pointer motion",text:"Smooth softens fast moves and sharp turns. Extra smooth gives a more relaxed path. Recorded follows the saved positions. Original system cursor shapes in older videos cannot be changed.")
+            }
+            Picker("Pointer motion",selection:Binding(get:{p.pointerSmoothing ?? .smooth},set:{ value in editor.update { $0.pointerSmoothing=value } })) {
+                ForEach(PointerSmoothing.allCases) { value in Text(value.name).tag(value) }
+            }.labelsHidden()
+            HStack {
+                Button(action:editor.suggestZooms) { Label("Auto focus",systemImage:"sparkles") }.buttonStyle(StudioButtonStyle())
+                InfoHint(title:"Auto focus",text:"Suggests zooms from pointer movement and pauses. Refreshing replaces previous automatic suggestions and keeps your manual zooms. Each suggestion stays editable.")
+            }
+        }
         if let p = editor.project, let z = p.zooms.first(where: { $0.id == editor.selectedZoomID }) {
             Rule()
-            HStack { Text("Selected zoom").font(Geist.font(13, .semibold)); Spacer(); IconButton(symbol: "trash", title: "Delete selected zoom", action: editor.deleteSelectedZoom) }
+            HStack { Text(z.automatic == true ? "Automatic zoom":"Selected zoom").font(Geist.font(13, .semibold)); Spacer(); IconButton(symbol: "trash", title: "Delete selected zoom", action: editor.deleteSelectedZoom) }
             FocusPad(x: zoomBinding(z, \.x), y: zoomBinding(z, \.y), image: editor.thumbnails.first).environmentObject(theme)
             parameter("Magnification", value: zoomBinding(z, \.scale), range: 1...4, suffix: "×", decimals: 1)
             parameter("Start", value: zoomBinding(z, \.start), range: 0...max(0, editor.duration - z.duration), suffix: "s", decimals: 2)
@@ -103,7 +116,7 @@ struct StudioInspector: View {
     }
     private func zoomBinding(_ z: Zoom, _ key: WritableKeyPath<Zoom, Double>) -> Binding<Double> {
         Binding(get: { z[keyPath: key] }, set: { value in
-            editor.update { p in if let i = p.zooms.firstIndex(where: { $0.id == z.id }) { p.zooms[i][keyPath: key] = value } }
+            editor.update { p in if let i = p.zooms.firstIndex(where: { $0.id == z.id }) { p.zooms[i][keyPath: key] = value;p.zooms[i].automatic=nil } }
         })
     }
     private func trimRow(_ title: String, value: Double, action: @escaping (Double) -> Void) -> some View {

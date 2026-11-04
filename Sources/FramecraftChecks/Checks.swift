@@ -16,6 +16,7 @@ struct FramecraftChecks {
         try checks.testShortClipAndTrimIntervals()
         try checks.testAppearanceRoundtripAndContrast()
         checks.testMotionAndNativePixels()
+        try checks.testAutomaticFocusAndMotion()
         try await checks.testCaptureContentBounds()
         try await checks.testDemoClip()
         try await checks.testActualVideoExport()
@@ -25,7 +26,7 @@ struct FramecraftChecks {
         let z = Zoom(start: 2, duration: 3)
         XCTAssertEqual(z.amount(at: 1.99), 0)
         XCTAssertEqual(z.amount(at: 2), 0)
-        XCTAssertEqual(z.amount(at: 2.3), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(z.amount(at: 2.3), Motion.ease(0.3/0.85), accuracy: 0.0001)
         XCTAssertEqual(z.amount(at: 3), 1)
         XCTAssertEqual(z.amount(at: 5), 0)
         XCTAssertEqual(z.amount(at: 6), 0)
@@ -116,6 +117,44 @@ struct FramecraftChecks {
         XCTAssertTrue(abs(smooth[120].x-0.5)<0.001)
         XCTAssertTrue(Motion.cursor(at:1,samples:smooth) != nil)
         XCTAssertTrue(Motion.cursor(at:3,samples:smooth) == nil)
+    }
+    func testAutomaticFocusAndMotion() throws {
+        let samples=(0...960).map { i -> CursorSample in
+            let t=Double(i)/120
+            let x=t<1 ? 0.15:t<1.35 ? 0.15+(t-1)/0.35*0.55:t<4 ? 0.7:t<4.4 ? 0.7-(t-4)/0.4*0.4:0.3
+            return CursorSample(time:t,x:x,y:t<4.4 ? 0.35:0.65)
+        }
+        let suggested=AutoFocus.suggest(samples:samples,start:0,end:8)
+        XCTAssertTrue(suggested.count>=2)
+        XCTAssertTrue(suggested.allSatisfy { $0.automatic == true && $0.start>=0 && $0.start+$0.duration<=8 })
+        XCTAssertTrue(suggested.contains { abs($0.x-0.7)<0.06 })
+        XCTAssertTrue(suggested.contains { abs($0.x-0.3)<0.06 })
+        let manual=Zoom(start:0,duration:4,x:0.2)
+        let merged=AutoFocus.merge(suggested,with:[manual,Zoom(start:5,duration:1,automatic:true)])
+        XCTAssertTrue(merged.contains { $0.id == manual.id })
+        XCTAssertTrue(!merged.filter { $0.automatic == true }.contains { $0.start<4 })
+        let idle=(0...240).map { CursorSample(time:Double($0)/120,x:0.5,y:0.5) }
+        XCTAssertTrue(AutoFocus.suggest(samples:idle,start:0,end:2).isEmpty)
+        let jitter=(0...1200).map { i in CursorSample(time:Double(i)/120,x:0.5+sin(Double(i)*0.4)*0.005,y:0.5) }
+        XCTAssertTrue(AutoFocus.suggest(samples:jitter,start:0,end:10).isEmpty)
+        let smoothed=Motion.smooth(samples,sigma:0.1)
+        func peakAcceleration(_ values:[CursorSample]) -> Double {
+            (1..<values.count-1).map { abs(values[$0+1].x-2*values[$0].x+values[$0-1].x) }.max()!
+        }
+        XCTAssertTrue(peakAcceleration(smoothed)<peakAcceleration(samples)*0.3)
+        for t in stride(from:1.0,through:1.35,by:0.001) {
+            let point=Motion.cursor(at:t,samples:smoothed)!
+            XCTAssertTrue((0.15...0.7).contains(point.x))
+        }
+        var p=Project(sourcePath:"/tmp/test.mp4",trimEnd:8)
+        p.cursorSamples=samples;p.pointerSmoothing = .extraSmooth;p.zooms=suggested
+        try p.validate(duration:8)
+        let copy=try JSONDecoder().decode(Project.self,from:JSONEncoder().encode(p))
+        XCTAssertEqual(copy.pointerSmoothing,.extraSmooth);XCTAssertEqual(copy.zooms,suggested)
+        let state=RenderState(p)
+        XCTAssertTrue(peakAcceleration(state.project.cursorSamples!)<peakAcceleration(samples)*0.3)
+        p.pointerSmoothing = .original;state.update(p)
+        XCTAssertEqual(state.project.cursorSamples,samples)
     }
     func testCaptureContentBounds() async throws {
         let geometry=CaptureFrameGeometry(surfaceSize:CGSize(width:640,height:480),contentRectPoints:CGRect(x:20,y:10,width:160,height:100),pixelScale:2,contentScale:1)

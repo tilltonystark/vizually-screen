@@ -4,7 +4,7 @@ import CoreText
 
 /// Deterministic, local sample content: a real movie that exercises preview and export.
 package enum DemoClip {
-    package static func create(at url: URL) async throws {
+    package static func create(at url: URL, includePointer:Bool = true) async throws {
         let temporary = url.deletingLastPathComponent().appendingPathComponent(".demo-\(UUID().uuidString).mp4")
         defer { try? FileManager.default.removeItem(at: temporary) }
         let writer = try AVAssetWriter(outputURL: temporary, fileType: .mp4)
@@ -40,7 +40,7 @@ package enum DemoClip {
                     throw CocoaError(.fileWriteUnknown)
                 }
                 context.scaleBy(x:2,y:2)
-                draw(context, time: Double(frame) / 60)
+                draw(context, time: Double(frame) / 60,includePointer:includePointer)
                 CVPixelBufferUnlockBaseAddress(buffer, [])
                 guard adaptor.append(buffer, withPresentationTime: CMTime(value: Int64(frame), timescale: 60)) else { throw writer.error ?? CocoaError(.fileWriteUnknown) }
             }
@@ -52,7 +52,7 @@ package enum DemoClip {
         } catch { writer.cancelWriting(); throw error }
     }
 
-    private static func draw(_ c: CGContext, time: Double) {
+    private static func draw(_ c: CGContext, time: Double,includePointer:Bool) {
         c.translateBy(x: 0, y: 720); c.scaleBy(x: 1, y: -1)
         c.setShouldAntialias(true)
         func color(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat = 1) -> CGColor { CGColor(red: r, green: g, blue: b, alpha: a) }
@@ -123,9 +123,11 @@ package enum DemoClip {
         let phase = min(1, max(0, (time - 0.8) / 5.8))
         let smooth = phase * phase * (3 - 2 * phase)
         let px = 540 + 480 * smooth, py = 485 - 310 * sin(smooth * .pi / 2)
+        if includePointer {
         c.saveGState(); c.translateBy(x: px, y: py)
         let pointer = CGMutablePath(); pointer.move(to: .zero); pointer.addLine(to: CGPoint(x: 3, y: 25)); pointer.addLine(to: CGPoint(x: 10, y: 17)); pointer.addLine(to: CGPoint(x: 17, y: 29)); pointer.addLine(to: CGPoint(x: 22, y: 26)); pointer.addLine(to: CGPoint(x: 15, y: 14)); pointer.addLine(to: CGPoint(x: 25, y: 13)); pointer.closeSubpath()
         c.addPath(pointer); c.setFillColor(ink); c.setStrokeColor(color(1, 1, 1)); c.setLineWidth(2); c.drawPath(using: .fillStroke); c.restoreGState()
+        }
         if time > 6.5 {
             let alpha = min(1, (time - 6.5) * 3)
             rect(873, 205, 272, 54, color(0.13, 0.16, 0.23, alpha), 10)

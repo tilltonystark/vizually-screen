@@ -94,7 +94,7 @@ final class RecordingWriter: NSObject, SCStreamOutput, @unchecked Sendable {
                 video.markAsFinished();self.audio?.markAsFinished();writer.endSession(atSourceTime:end)
                 writer.finishWriting {
                     guard writer.status == .completed else { continuation.resume(throwing:writer.error ?? CocoaError(.fileWriteUnknown));return }
-                    let normalized=cursor.map { values in Motion.smooth(values.compactMap { v in let t=v.time-first.seconds;guard t>=0 else { return nil };return CursorSample(time:t,x:v.x,y:v.y,visible:v.visible) }) }
+                    let normalized=cursor.map { values in values.compactMap { v -> CursorSample? in let t=v.time-first.seconds;guard t>=0 else { return nil };return CursorSample(time:t,x:v.x,y:v.y,visible:v.visible) } }
                     continuation.resume(returning:CaptureResult(url:self.url,samples:normalized,frames:self.frames,dropped:self.dropped))
                 }
             }

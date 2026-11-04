@@ -27,7 +27,8 @@ import UniformTypeIdentifiers
         let asset=AVURLAsset(url:source)
         var p=Project(sourcePath:source.path,trimEnd:2);p.padding=0
         var reports: [[String:Any]]=[]
-        for name in ["legacy-preset","high","efficient","master"] {
+        let motionOnly=CommandLine.arguments.contains("--motion-only")
+        for name in motionOnly ? []:["legacy-preset","high","efficient","master"] {
             let quality=VideoQuality(rawValue:name) ?? .high
             let output=directory.appendingPathComponent("\(name).\(quality.fileExtension)")
             let reuse=CommandLine.arguments.contains("--measure-only")
@@ -40,12 +41,25 @@ import UniformTypeIdentifiers
             let result=try await measure(reference:asset,candidate:AVURLAsset(url:output),name:name,directory:directory)
             reports.append(result);print(result)
         }
-        var motionProject=p
-        motionProject.zooms=[Zoom(start:0.1,duration:1.25,scale:1.7,x:0.3,y:0.4),Zoom(start:0.7,duration:1.2,scale:2,x:0.65,y:0.5)]
-        motionProject.cursorSamples=Motion.smooth((0..<241).map { i in let t=Double(i)/120;return CursorSample(time:t,x:0.25+t*0.25+sin(t*70)*0.003,y:0.45+sin(t*3)*0.12) })
-        let motionURL=directory.appendingPathComponent("motion-demo.mp4")
-        if FileManager.default.fileExists(atPath:motionURL.path) { try FileManager.default.removeItem(at:motionURL) }
-        try await MediaExporter.export(asset:asset,project:motionProject,quality:.high,to:motionURL)
+        let timeline=AVMutableComposition()
+        let sourceTrack=try await asset.loadTracks(withMediaType:.video)[0]
+        let track=timeline.addMutableTrack(withMediaType:.video,preferredTrackID:kCMPersistentTrackID_Invalid)!
+        for i in 0..<4 { try track.insertTimeRange(CMTimeRange(start:.zero,duration:CMTime(seconds:2,preferredTimescale:600)),of:sourceTrack,at:CMTime(seconds:Double(i*2),preferredTimescale:600)) }
+        var motionProject=Project(sourcePath:source.path,trimEnd:8)
+        motionProject.cursorSamples=(0...960).map { i in
+            let t=Double(i)/120
+            let x=t<1 ? 0.15:t<1.35 ? 0.15+(t-1)/0.35*0.55:t<4 ? 0.7:t<4.4 ? 0.7-(t-4)/0.4*0.4:0.3
+            return CursorSample(time:t,x:x,y:t<4.4 ? 0.35:0.65)
+        }
+        motionProject.zooms=AutoFocus.suggest(samples:motionProject.cursorSamples!,start:0,end:8)
+        for (name,setting) in [("motion-recorded",PointerSmoothing.original),("motion-demo",.extraSmooth)] {
+            motionProject.pointerSmoothing=setting
+            let motionURL=directory.appendingPathComponent("\(name).mp4")
+            if FileManager.default.fileExists(atPath:motionURL.path) { try FileManager.default.removeItem(at:motionURL) }
+            try await MediaExporter.export(asset:timeline,project:motionProject,quality:.high,to:motionURL)
+        }
+        print("Motion: 8 seconds, \(motionProject.zooms.count) editable auto-focus regions, recorded and extra-smooth pointer variants")
+        if motionOnly { return }
         let report: [String:Any]=["date":"2026-11-03","scope":"Synthetic SDR 1920x1080 screen-detail encode/decode; not live capture or competitor comparison", "reference":"ProRes 4444, 60fps, two seconds; decoded source is reference", "results":reports]
         try JSONSerialization.data(withJSONObject:report,options:[.prettyPrinted,.sortedKeys]).write(to:directory.appendingPathComponent("quality-report.json"))
         print("Report: \(directory.appendingPathComponent("quality-report.json").path)")
