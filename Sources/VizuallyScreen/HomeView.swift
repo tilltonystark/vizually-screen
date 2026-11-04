@@ -34,6 +34,8 @@ struct HomeView:View {
     let record:()->Void
     @EnvironmentObject var theme:StudioTheme
     @State private var query=""
+    @State private var hoveredMenu:String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var renameEntry:RecordingReference?
     @State private var renameTitle=""
     @State private var deleteEntry:RecordingReference?
@@ -128,19 +130,25 @@ struct HomeView:View {
             .contextMenu { recordingActions(entry) }
             .overlay(alignment:.topTrailing) {
                 Menu { recordingActions(entry) } label: {
-                    Image(systemName:"ellipsis").font(Geist.font(14,.medium)).foregroundStyle(Ink.primary).frame(width:36,height:36)
-                        .background(.white,in:RoundedRectangle(cornerRadius:8)).overlay(RoundedRectangle(cornerRadius:8).strokeBorder(Ink.line,lineWidth:0.5))
-                }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().padding(8)
+                    Image(systemName:"ellipsis").font(Geist.font(14,.medium)).foregroundStyle(Ink.primary).frame(width:40,height:40)
+                        .background(hoveredMenu == entry.id ? Color.oklch(0.94,0.003):.white,in:RoundedRectangle(cornerRadius:8)).overlay(RoundedRectangle(cornerRadius:8).strokeBorder(Ink.line,lineWidth:0.5))
+                }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    .contentShape(RoundedRectangle(cornerRadius:8))
+                    .onHover { inside in
+                        if inside { hoveredMenu=entry.id } else if hoveredMenu == entry.id { hoveredMenu=nil }
+                    }
+                    .animation(reduceMotion ? nil:.easeOut(duration:0.15),value:hoveredMenu == entry.id)
+                    .help("Recording actions").padding(8)
                     .accessibilityLabel("Actions for \(entry.displayName)")
                     .feedbackTarget("library.actions.\(SHA256.hash(data:Data(entry.id.utf8)).prefix(8).map { String(format:"%02x",$0) }.joined())","Recording actions: \(entry.displayName)")
             }
             .task { await library.loadDetails(entry) }
     }
     @ViewBuilder private func recordingActions(_ entry:RecordingReference) -> some View {
-        Button("Rename…") { renameTitle=entry.displayName;renameEntry=entry }
-        Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath:entry.sourcePath)]) }
+        Button { renameTitle=entry.displayName;renameEntry=entry } label: { Label("Rename…",systemImage:"pencil") }
+        Button { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath:entry.sourcePath)]) } label: { Label("Reveal in Finder",systemImage:"folder") }
         Divider()
-        Button(FileManager.default.fileExists(atPath:entry.sourcePath) ? "Move to Trash…":"Remove from library…",role:.destructive) { deleteEntry=entry }
+        Button(role:.destructive) { deleteEntry=entry } label: { Label(FileManager.default.fileExists(atPath:entry.sourcePath) ? "Move to Trash…":"Remove from library…",systemImage:"trash") }
     }
 
 }
