@@ -163,7 +163,7 @@ struct RecordingSheet: View {
                         Text("Recording area").font(Geist.font(12,.medium))
                         Spacer()
                         Text(area.dimensions).font(Geist.font(12,.medium)).monospacedDigit()
-                        InfoHint(title:"Area authorization",text:"macOS authorizes a display and calls its button Share Screen. Vizually Screen crops the stream to the rectangle shown here. Only that area is saved. The rest of the display is not saved in the video.")
+                        InfoHint(title:"Area recording permission",text:"macOS authorizes a display and calls its button Share Screen. Vizually Screen crops the stream to the rectangle shown here. Only that area is saved. The rest of the display is not saved in the video.")
                     }
                     GeometryReader { geometry in
                         let scale=min(geometry.size.width/area.displaySize.width,geometry.size.height/area.displaySize.height)
@@ -176,8 +176,8 @@ struct RecordingSheet: View {
                         }.frame(width:size.width,height:size.height).frame(maxWidth:.infinity,maxHeight:.infinity)
                     }.frame(height:100).accessibilityLabel("Only the highlighted rectangle will be recorded, \(area.dimensions)")
                     if capture.areaNeedsAuthorization {
-                        Button("Authorize display…",action:capture.authorizeArea).buttonStyle(StudioButtonStyle()).disabled(capture.picking)
-                        Text("macOS calls this Share Screen. Your recording stays cropped to the highlighted area.").font(Geist.font(11)).foregroundStyle(Ink.secondary).fixedSize(horizontal:false,vertical:true)
+                        Button("Allow area recording…",action:capture.authorizeArea).buttonStyle(StudioButtonStyle()).disabled(capture.picking)
+                        Text("macOS will ask to share this display. Only the outlined area will be recorded.").font(Geist.font(11)).foregroundStyle(Ink.secondary).fixedSize(horizontal:false,vertical:true)
                     }
                 }.padding(14).background(Ink.soft,in:RoundedRectangle(cornerRadius:10))
             }
@@ -187,8 +187,9 @@ struct RecordingSheet: View {
             Toggle("Include system audio", isOn: $capture.systemAudio).toggleStyle(.switch).tint(theme.accent).feedbackTarget("recording.audio","System audio")
             HStack { Text("Saved to Movies/Vizually Screen").font(Geist.font(12)).foregroundStyle(Ink.secondary);InfoHint(title:"Saved recordings",text:"The original video and its pointer data are saved together in Movies/Vizually Screen. Stop recording from the app or menu bar.") }
             if let error = capture.error { Text(error).font(Geist.font(12)).foregroundStyle(.red).textSelection(.enabled) }
-            HStack { Spacer(); Button("Cancel") { dismiss() }.buttonStyle(StudioButtonStyle()); Button("Start recording") { Task { await capture.start(); if capture.error == nil { dismiss() } } }.buttonStyle(StudioButtonStyle(primary: true)).disabled(!capture.hasSource || capture.busy || capture.picking || capture.areaNeedsAuthorization).feedbackTarget("recording.start","Start recording") }
+            HStack { Spacer(); Button("Cancel") { dismiss() }.buttonStyle(StudioButtonStyle()); Button(capture.areaPreview == nil ? "Start recording":"Record this area") { Task { await capture.start(); if capture.error == nil { dismiss() } } }.buttonStyle(StudioButtonStyle(primary: true)).disabled(!capture.hasSource || capture.busy || capture.picking || capture.areaNeedsAuthorization).feedbackTarget("recording.start",capture.areaPreview == nil ? "Start recording":"Record this area") }
         }.padding(28).frame(width: 450).foregroundStyle(Ink.primary).background(.white)
-            .task { await capture.prepareDefaultSource() }
+            .task { capture.restoreAreaIndicator();await capture.prepareDefaultSource() }
+            .onDisappear { if !capture.recording && !capture.busy { capture.hideAreaIndicator() } }
     }
 }

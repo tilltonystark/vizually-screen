@@ -19,3 +19,18 @@ package enum CaptureArea {
         local.offsetBy(dx:display.minX,dy:display.minY)
     }
 }
+
+extension CaptureArea {
+    /// AppKit uses a bottom-left global origin; selection uses display-local top-left.
+    package static func appKitBounds(local: CGRect, displayFrame: CGRect) -> CGRect {
+        CGRect(x:displayFrame.minX+local.minX,y:displayFrame.maxY-local.maxY,width:local.width,height:local.height)
+    }
+    /// A one-point gap keeps every indicator window outside the captured rectangle.
+    /// Do not rely on NSWindow.sharingType to exclude UI from ScreenCaptureKit.
+    package static func indicatorStrips(around rect:CGRect) -> [CGRect] {
+        [CGRect(x:rect.minX-3,y:rect.minY-3,width:2,height:rect.height+6),
+         CGRect(x:rect.maxX+1,y:rect.minY-3,width:2,height:rect.height+6),
+         CGRect(x:rect.minX-1,y:rect.minY-3,width:rect.width+2,height:2),
+         CGRect(x:rect.minX-1,y:rect.maxY+1,width:rect.width+2,height:2)]
+    }
+}

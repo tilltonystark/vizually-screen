@@ -38,6 +38,15 @@ struct VizuallyScreenChecks {
         let global=CaptureArea.globalBounds(local:forward,display:CGRect(x:-1512,y:200,width:1512,height:982))
         XCTAssertEqual(global.origin,CGPoint(x:-1480,y:241))
         XCTAssertEqual((global.midX-global.minX)/global.width,0.5,accuracy:0.0001)
+        let appKit=CaptureArea.appKitBounds(local:forward,displayFrame:CGRect(x:-1512,y:200,width:1512,height:982))
+        XCTAssertEqual(appKit,CGRect(x:-1480,y:792,width:588,height:349))
+        for area in [appKit,CGRect(x:0,y:0,width:1512,height:982),CGRect(x:100,y:-1080,width:400,height:300)] {
+            let strips=CaptureArea.indicatorStrips(around:area)
+            XCTAssertEqual(strips.count,4)
+            for strip in strips { XCTAssertTrue(strip.width > 0 && strip.height > 0);XCTAssertTrue(strip.intersection(area).isNull || strip.intersection(area).isEmpty) }
+            XCTAssertEqual(strips[0].maxX,area.minX-1,accuracy:0.0001)
+            XCTAssertEqual(strips[1].minX,area.maxX+1,accuracy:0.0001)
+        }
         XCTAssertTrue(CaptureArea.selection(from:.zero,to:CGPoint(x:2,y:3),displaySize:size,pixelScale:2) == nil)
         XCTAssertTrue(CaptureArea.selection(from:CGPoint(x:Double.nan,y:0),to:.zero,displaySize:size,pixelScale:2) == nil)
         XCTAssertTrue(CaptureArea.selection(from:.zero,to:CGPoint(x:100,y:100),displaySize:size,pixelScale:0) == nil)
@@ -238,7 +247,7 @@ struct VizuallyScreenChecks {
         let data=CVPixelBufferGetBaseAddress(source)!.assumingMemoryBound(to:UInt8.self),stride=CVPixelBufferGetBytesPerRow(source)
         for y in 0..<480 { for x in 0..<640 {
             let i=y*stride+x*4,inside=(40..<360).contains(x) && (20..<220).contains(y)
-            data[i]=inside ? 240:0;data[i+1]=inside ? 240:0;data[i+2]=inside ? 240:0;data[i+3]=255
+            data[i]=inside ? 240:0;data[i+1]=inside ? 240:140;data[i+2]=inside ? 240:255;data[i+3]=255
         } }
         CVPixelBufferUnlockBaseAddress(source,[])
         let processor=try CaptureFrameProcessor(size:geometry.nativeSize,pixelFormat:kCVPixelFormatType_32BGRA)
@@ -267,7 +276,9 @@ struct VizuallyScreenChecks {
             let context=CGContext(data:storage.baseAddress,width:320,height:200,bitsPerComponent:8,bytesPerRow:1280,space:CGColorSpace(name:CGColorSpace.sRGB)!,bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
             context.draw(image,in:CGRect(x:0,y:0,width:320,height:200))
         }
-        for (x,y) in [(2,2),(317,2),(2,197),(317,197)] { XCTAssertTrue(rgba[(y*320+x)*4]>210) }
+        for (x,y) in [(0,0),(319,0),(0,199),(319,199),(2,2),(317,2),(2,197),(317,197)] {
+            for channel in 0..<3 { XCTAssertTrue(rgba[(y*320+x)*4+channel]>210) }
+        }
     }
     func testDemoClip() async throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("demo-check-\(UUID().uuidString).mp4")

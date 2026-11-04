@@ -25,6 +25,14 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     var onFinish: ((CaptureResult)->Void)?
     private var filter: SCContentFilter?
     private var selectedArea:CGRect?
+    private var selectedAreaDisplayID:CGDirectDisplayID?
+    private let areaIndicator=RecordingAreaIndicator()
+    func hideAreaIndicator() { areaIndicator.hide() }
+    func restoreAreaIndicator() {
+        if let pendingArea { areaIndicator.show(displayID:pendingArea.displayID,rect:pendingArea.rect,recording:false) }
+        else if let selectedArea,let selectedAreaDisplayID { areaIndicator.show(displayID:selectedAreaDisplayID,rect:selectedArea,recording:recording) }
+        else { areaIndicator.hide() }
+    }
     @Published var selectionStatus:String?
     @Published private var pendingArea:(displayID:CGDirectDisplayID,rect:CGRect)?
     @Published var areaPreview:AreaPreview?
@@ -39,27 +47,29 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     var supportsArea:Bool { if #available(macOS 15.2,*) { return true };return false }
     func chooseArea() {
         guard supportsArea,!recording,!busy,!picking else { return }
+        areaIndicator.hide()
         error=nil;picking=true;selectionStatus="Drag to select an area. Esc cancels."
         areaSelector.present(on:NSScreen.screens) { [weak self] choice in
             guard let self else { return }
             guard let (screen,rect)=choice,
                   let number=screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
-                self.picking=false;self.selectionStatus=nil;return
+                self.picking=false;self.selectionStatus=nil;self.restoreAreaIndicator();return
             }
             let id=number.uint32Value
             self.pendingArea=(id,rect)
+            self.restoreAreaIndicator()
             self.areaPreview=AreaPreview(rect:rect,displaySize:screen.frame.size,pixelScale:screen.backingScaleFactor)
             if #available(macOS 15.2,*),let filter=self.filter,filter.style == .display,filter.includedDisplays.first?.displayID == id {
                 self.acceptAreaSource(filter);return
             }
             self.picking=false
-            self.selectionStatus="Area selected · Display authorization needed"
+            self.selectionStatus="Area selected · Permission needed before recording"
         }
     }
     func authorizeArea() {
         guard let pendingArea,!picking,!busy,!recording else { return }
         let id=pendingArea.displayID
-        picking=true;selectionStatus="In macOS, choose Share Screen for this display. Only your selected area will be recorded."
+        picking=true;selectionStatus="In macOS, choose Share Screen to allow recording. Only the outlined area will be saved."
         Task { @MainActor in
             if CGPreflightScreenCaptureAccess(),
                let content=try? await SCShareableContent.excludingDesktopWindows(false,onScreenWindowsOnly:true),
@@ -78,9 +88,11 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
             error="The shared display does not match your selected area. Choose the area again and share that display.";return
         }
         let rect=pendingArea.rect
+        let displayID=pendingArea.displayID
         self.pendingArea=nil
         applySource(candidate)
-        selectedArea=rect
+        selectedArea=rect;selectedAreaDisplayID=displayID
+        restoreAreaIndicator()
         areaPreview=AreaPreview(rect:rect,displaySize:sourceBounds(candidate).size,pixelScale:Double(candidate.pointPixelScale))
         let size=VideoQuality.nativeSize(points:rect.size,scale:Double(candidate.pointPixelScale))
         sourceSummary="Selected area · \(size.0) × \(size.1)"
@@ -102,7 +114,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     func chooseSource(area:Bool=false) {
         guard !recording,!busy else { return }
         error=nil;picking=true
-        if !area { pendingArea=nil;areaPreview=nil;selectionStatus="Choose a screen or window in the macOS picker." }
+        if !area { areaIndicator.hide();pendingArea=nil;areaPreview=nil;selectionStatus="Choose a screen or window in the macOS picker." }
         let picker=SCContentSharingPicker.shared
         var config=SCContentSharingPickerConfiguration()
         config.allowedPickerModes=area ? [.singleDisplay]:[.singleDisplay,.singleWindow]
@@ -128,6 +140,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
         return filter.contentRect
     }
     private func applySource(_ filter:SCContentFilter) {
+        areaIndicator.hide();selectedAreaDisplayID=nil
         self.filter=filter;selectedArea=nil;areaPreview=nil;hasSource=true;picking=false;selectionStatus=nil;error=nil
         let size=VideoQuality.nativeSize(points:sourceBounds(filter).size,scale:Double(filter.pointPixelScale))
         let name:String
@@ -177,6 +190,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     }
     private func beginRecordingClock() {
         recording=true;busy=false;began=Date();elapsed=0
+        restoreAreaIndicator()
         recordingTimer=Timer.scheduledTimer(withTimeInterval:0.1,repeats:true) { [weak self] _ in
             Task { @MainActor in guard let self,let began=self.began else { return };self.elapsed=Date().timeIntervalSince(began) }
         }
@@ -187,7 +201,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     }
     func stop() async {
         guard !stopping,let stream,let output else { return }
-        stopping=true;busy=true
+        stopping=true;busy=true;areaIndicator.hide()
         let end=CMClockGetTime(CMClockGetHostTimeClock())
         cursorTimer?.invalidate();cursorTimer=nil
         do {
@@ -197,12 +211,12 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
             cleanup();onFinish?(result)
         } catch { fail(error) }
     }
-    private func cleanup() { sessionID=UUID();recordingTimer?.invalidate();recordingTimer=nil;began=nil;cursorTimer?.invalidate();cursorTimer=nil;stream=nil;output=nil;recording=false;busy=false;stopping=false;filter=nil;selectedArea=nil;pendingArea=nil;areaPreview=nil;selectionStatus=nil;areaSelector.cancel();hasSource=false;sourceSummary="Choose a source for the next recording";SCContentSharingPicker.shared.isActive=false }
+    private func cleanup() { sessionID=UUID();recordingTimer?.invalidate();recordingTimer=nil;began=nil;cursorTimer?.invalidate();cursorTimer=nil;stream=nil;output=nil;recording=false;busy=false;stopping=false;filter=nil;areaIndicator.hide();selectedAreaDisplayID=nil;selectedArea=nil;pendingArea=nil;areaPreview=nil;selectionStatus=nil;areaSelector.cancel();hasSource=false;sourceSummary="Choose a source for the next recording";SCContentSharingPicker.shared.isActive=false }
     private func fail(_ error: Error) {
         output?.cancel();self.error="\(error.localizedDescription)\n\((error as NSError).domain) (\((error as NSError).code)). Select the source again with the macOS picker. If macOS still refuses, quit Vizually Screen and re-enable this build in Screen & System Audio Recording."
         cleanup()
     }
-    nonisolated func contentSharingPicker(_ picker:SCContentSharingPicker,didCancelFor stream:SCStream?) { Task { @MainActor in self.picking=false;self.selectionStatus=self.pendingArea == nil ? nil:"Area selected · Authorization cancelled. Try again." } }
+    nonisolated func contentSharingPicker(_ picker:SCContentSharingPicker,didCancelFor stream:SCStream?) { Task { @MainActor in self.picking=false;self.selectionStatus=self.pendingArea == nil ? nil:"Area selected · Permission cancelled. Try again.";self.restoreAreaIndicator() } }
     nonisolated func contentSharingPicker(_ picker:SCContentSharingPicker,didUpdateWith filter:SCContentFilter,for stream:SCStream?) {
         Task { @MainActor in
             if self.pendingArea != nil { self.acceptAreaSource(filter) } else { self.applySource(filter) }
@@ -213,6 +227,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
         Task { @MainActor in
             guard self.stream === stream,!self.stopping else { return }
             // A source disappearing is recoverable: finalize received media before reporting it.
+            self.areaIndicator.hide()
             self.cursorTimer?.invalidate();self.cursorTimer=nil
             if let output=self.output {
                 do { let result=try await output.finish(cursor:self.smoothCursor ? self.cursorSamples:nil,hostEnd:CMClockGetTime(CMClockGetHostTimeClock()));self.cleanup();self.onFinish?(result);self.error="Recording ended: \(error.localizedDescription). Received frames were saved." }
