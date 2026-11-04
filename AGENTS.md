@@ -27,3 +27,7 @@ HANDOFF.md records the current implementation, evidence and known gaps. User sep
 
 Keep docs/feature-map.md current before expanding scope: capability, user relevance, priority, implementation status, observed evidence and quality gate are separate fields.
 Feature count does not measure quality or product parity. For each release, compare the same workflow with Shotbase where feasible; mark unavailable comparisons unverified. Do not add a competitor feature merely because it exists. Capture detail, motion, source fit and reliability outrank broad feature coverage.
+
+## Reusable feedback package
+
+Vizually Screen must consume the canonical VizuallyFeedback library product in Sources/VizuallyFeedback. Keep app-specific identity, Geist appearance, migration and playback hooks only in Sources/VizuallyScreen/Feedback.swift. Do not copy annotation behavior into the app or a sample. Every future feedback interaction, persistence, transport or rendering fix must be made in the library, documented in docs/feedback/CHANGELOG.md, and checked with scripts/check-feedback-package.sh plus an appropriate native interaction check. Keep the independent sample using only public library API. Preserve existing comments/session; never commit feedback archives or secrets. SwiftUI/macOS is current scope; web/React needs its own adapter and explicit scope.

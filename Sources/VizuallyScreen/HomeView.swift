@@ -1,3 +1,4 @@
+import VizuallyFeedback
 import SwiftUI
 import CryptoKit
 import VizuallyScreenCore
@@ -43,18 +44,19 @@ struct HomeView:View {
                 HStack(spacing:8) { Image(systemName:"magnifyingglass").foregroundStyle(Ink.muted);TextField("Search recordings",text:$query).textFieldStyle(.plain).font(StudioType.caption) }.padding(10).frame(width:240).feedbackTarget("home.search","Search recordings").background(Ink.soft,in:RoundedRectangle(cornerRadius:8))
                 IconButton(symbol:"arrow.clockwise",title:"Refresh recordings") { Task { await library.refresh() } }
                 IconButton(symbol:"square.and.arrow.down",title:"Import video",action:editor.importVideo).feedbackTarget("home.import","Import video")
-                Button(action:record) { Label("New recording",systemImage:"record.circle") }.buttonStyle(StudioButtonStyle(primary:true)).feedbackTarget("home.record","New recording").focused($recordFocused)
+                Button(action:record) { Label("New recording",systemImage:"record.circle") }.buttonStyle(StudioButtonStyle(primary:true)).feedbackTarget("home.record","New recording").focusable().focused($recordFocused)
             }.padding(.leading,StudioLayout.headerLeading).padding(.trailing,24).frame(height:StudioLayout.headerHeight).contentShape(Rectangle()).gesture(WindowDragGesture())
             Rule()
             HStack(spacing:0) {
-                VStack(alignment:.leading,spacing:16) {
-                    Text("LIBRARY").feedbackTarget("home.sidebar.heading","Library heading").font(Geist.font(10,.medium)).tracking(1).foregroundStyle(Ink.muted)
-                    Label("All recordings",systemImage:"square.grid.2x2").font(StudioType.controlLabel).foregroundStyle(theme.accent).padding(12).frame(maxWidth:.infinity,alignment:.leading).background(theme.tint,in:RoundedRectangle(cornerRadius:8)).feedbackTarget("home.sidebar.all","All recordings")
-                    Label("On this Mac",systemImage:"internaldrive").font(StudioType.caption).foregroundStyle(Ink.secondary).padding(.horizontal,12).feedbackTarget("home.sidebar.local","On this Mac")
-                    Spacer()
-                    Button { Task { await editor.loadDemo() } } label: { Label("Explore demo",systemImage:"play.rectangle") }.buttonStyle(StudioButtonStyle(quiet:true)).feedbackTarget("home.sidebar.demo","Explore demo")
-                    Button("Open project…",action:editor.openProject).buttonStyle(StudioButtonStyle(quiet:true)).feedbackTarget("home.sidebar.open","Open project")
-                }.padding(20).frame(width:190).background(.white)
+                VStack(alignment:.leading,spacing:4) {
+                    Text("LIBRARY").font(Geist.font(10,.medium)).tracking(1).foregroundStyle(Ink.muted).padding(.horizontal,10).padding(.bottom,8).feedbackTarget("home.sidebar.heading","Library heading")
+                    sidebarItem("All recordings",symbol:"square.grid.2x2",id:"all",selected:true) { query="";Task { await library.refresh() } }
+                    sidebarItem("Movies folder",symbol:"folder",id:"local") { NSWorkspace.shared.open(FileManager.default.urls(for:.moviesDirectory,in:.userDomainMask)[0]) }
+                    Rule().padding(.vertical,8)
+                    sidebarItem("Explore demo",symbol:"play.rectangle",id:"demo") { Task { await editor.loadDemo() } }
+                    sidebarItem("Open recording…",symbol:"square.and.arrow.down",id:"open",action:editor.openProject)
+                    Spacer(minLength:16)
+                }.padding(.horizontal,12).padding(.vertical,20).frame(width:190).background(.white)
                 Rule(vertical:true)
                 VStack(alignment:.leading,spacing:24) {
                     HStack(alignment:.center,spacing:10) {
@@ -62,7 +64,7 @@ struct HomeView:View {
                         Text("\(library.entries.count)").font(Geist.font(12,.medium)).monospacedDigit().foregroundStyle(Ink.secondary).padding(.horizontal,8).frame(minWidth:28,minHeight:28).background(.white,in:Capsule()).overlay(Capsule().strokeBorder(Ink.line,lineWidth:0.5)).feedbackTarget("home.recordings.count","Recording count")
                         Spacer()
                         Text("Most recent").font(StudioType.caption).foregroundStyle(Ink.secondary)
-                    }
+                    }.accessibilityElement(children:.contain)
                     if let error=library.error { Label(error,systemImage:"exclamationmark.triangle").font(StudioType.caption).foregroundStyle(.red) }
                     if library.loading && library.entries.isEmpty { ProgressView("Loading recordings…").frame(maxWidth:.infinity,maxHeight:.infinity) }
                     else if filtered.isEmpty {
@@ -82,6 +84,11 @@ struct HomeView:View {
             }
         }.background(.white).background(WindowChrome()).disabled(editor.busy)
         .defaultFocus($recordFocused,true)
+    }
+    private func sidebarItem(_ title:String,symbol:String,id:String,selected:Bool = false,action:@escaping ()->Void) -> some View {
+        Button(action:action) { HStack(spacing:8) { Image(systemName:symbol).frame(width:16);Text(title) } }
+            .buttonStyle(SidebarButtonStyle(selected:selected)).feedbackTarget("home.sidebar.\(id)",title)
+            .accessibilityAddTraits(selected ? .isSelected:[])
     }
     private func card(_ entry:RecordingReference) -> some View {
         let detail=library.details[entry.id]

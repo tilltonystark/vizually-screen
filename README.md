@@ -13,6 +13,10 @@ Record a screen or a single app window using the macOS source picker. An already
 
 The old `.framecraft.json` project format remains readable. New projects use `.vizually.json`; originals are never overwritten by export.
 
+## Reusable feedback package
+
+The **VizuallyFeedback** Swift Package library is used directly by this app and can be added to other SwiftUI/macOS projects. [Installation, API and update workflow](docs/feedback/README.md) · [independent sample](Examples/FeedbackDemo). Future feedback fixes live in the library so the app and package share one implementation.
+
 ## Library and app feedback
 
 The home screen discovers prior recordings and saved edits, including legacy recordings. Returning home saves a working copy without changing the original video. Use the floating comment button at the bottom right, or press **C** when not typing, to toggle feedback mode. Hover highlights a registered SwiftUI control; click opens a pinned draft. **Enter** sends; **Shift+Enter** inserts a line. The button's status dot tracks the most recent comment: queued (amber), acknowledged/working (blue), or completed (green). It reflects the annotation lifecycle, not an independent process heartbeat. There is no feedback-history panel. Feedback covers the app header, editor, home and app-owned recording/export/appearance dialogs.

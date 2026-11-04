@@ -151,8 +151,9 @@ final class Editor: ObservableObject {
         if panel.runModal() == .OK, let url = panel.url { Task { await load(url) } }
     }
     func openProject() {
-        let panel = NSOpenPanel(); panel.allowedContentTypes = [.json]
+        let panel = NSOpenPanel(); panel.allowedContentTypes = [.movie,.json];panel.canChooseDirectories=false;panel.allowsMultipleSelection=false;panel.title="Open recording or saved project"
         if panel.runModal() == .OK, let url = panel.url {
+            if url.pathExtension.lowercased() != "json" { Task { await load(url) };return }
             do {
                 let saved = try JSONDecoder().decode(Project.self, from: Data(contentsOf: url))
                 Task { await load(URL(fileURLWithPath: saved.sourcePath), saved: saved,projectURL:url) }

@@ -53,7 +53,7 @@ P0 means release-blocking core quality. P1 means a valuable next workflow after 
 | AI filenames / tags / search | Organize large libraries | P3 | Not built | A | Start with reliable local library/search; measure whether AI helps |
 | Capture reminders | Follow-up utility | P3 | Not built | A | User demand before additional notifications |
 | Settings / updates | Predictable maintenance | P1 | Partial app controls; no updater | U | Stable identity, permission continuity, migration and signed distribution |
-| Native pinned app feedback | Report precise defects to this build | P1 | Built; direct delivery, C toggle and header hover observed; user completed Enter test; exhaustive target audit pending | U: Send Feedback is not evidence of equivalent annotation | Hover targets accurate, comments persist with source context, no accidental capture activation |
+| Native pinned app feedback | Report precise defects to this build | P1 | Shared VizuallyFeedback library; independent host and native keyboard checks pass; pointer audit pending | U: Send Feedback is not evidence of equivalent annotation | Hover targets accurate, comments persist with source context, no accidental capture activation |
 
 The A rows summarize advertised features from the [official Shotbase page](https://shotbase.com/). Their existence alone is not a reason to implement them. Unverified rows require observation, not inference.
 

@@ -1,3 +1,4 @@
+import VizuallyFeedback
 import SwiftUI
 import AVKit
 
@@ -6,7 +7,7 @@ struct VizuallyScreenApp: App {
     @StateObject private var editor = Editor()
     @StateObject private var capture = Capture()
     @StateObject private var theme = StudioTheme()
-    @StateObject private var feedback = FeedbackStore()
+    @StateObject private var feedback = ScreenFeedback.makeStore()
     init() { Geist.register() }
     private var locked: Bool { editor.busy || capture.recording || capture.busy }
     var body: some Scene {
@@ -23,11 +24,12 @@ struct VizuallyScreenApp: App {
                 }
         }
         .windowStyle(.hiddenTitleBar)
+        .windowBackgroundDragBehavior(.disabled)
         .defaultSize(width: 1320, height: 860)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Import Video…", action: editor.importVideo).keyboardShortcut("i").disabled(locked)
-                Button("Open Project…", action: editor.openProject).keyboardShortcut("o").disabled(locked)
+                Button("Open Recording or Project…", action: editor.openProject).keyboardShortcut("o").disabled(locked)
                 Button("Save Project…", action: editor.saveProject).keyboardShortcut("s").disabled(editor.project == nil || locked)
                 Button("Open Demo Project") { Task { await editor.loadDemo() } }.disabled(locked)
             }

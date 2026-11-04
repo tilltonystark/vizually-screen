@@ -1,3 +1,4 @@
+import VizuallyFeedback
 import SwiftUI
 import ImageIO
 import UniformTypeIdentifiers

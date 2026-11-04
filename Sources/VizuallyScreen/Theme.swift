@@ -1,3 +1,4 @@
+import VizuallyFeedback
 import SwiftUI
 import CoreText
 import VizuallyScreenCore
@@ -117,6 +118,23 @@ struct Rule: View {
     var vertical = false
     @Environment(\.displayScale) private var scale
     var body: some View { Rectangle().fill(Ink.line).frame(width: vertical ? 1/scale : nil, height: vertical ? nil : 1/scale) }
+}
+struct SidebarButtonStyle:ButtonStyle {
+    @EnvironmentObject var theme:StudioTheme
+    var selected=false
+    func makeBody(configuration:Configuration) -> some View { Row(configuration:configuration,selected:selected).environmentObject(theme) }
+    private struct Row:View {
+        @EnvironmentObject var theme:StudioTheme
+        let configuration:Configuration
+        let selected:Bool
+        @State private var hover=false
+        var body:some View {
+            configuration.label.font(Geist.font(12,.medium)).lineLimit(1).frame(maxWidth:.infinity,alignment:.leading).padding(.horizontal,10).frame(height:36)
+                .foregroundStyle(selected ? theme.accent:Ink.secondary)
+                .background(selected ? theme.tint:hover || configuration.isPressed ? Ink.soft:.clear,in:RoundedRectangle(cornerRadius:8))
+                .contentShape(Rectangle()).onHover { hover=$0 }
+        }
+    }
 }
 struct StudioIconButtonStyle:ButtonStyle {
     @Environment(\.isEnabled) private var enabled

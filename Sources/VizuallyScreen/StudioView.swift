@@ -1,3 +1,4 @@
+import VizuallyFeedback
 import SwiftUI
 import AVKit
 import VizuallyScreenCore
@@ -43,7 +44,7 @@ struct StudioView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Vizually Screen").font(Geist.font(13, .semibold)).feedbackTarget("editor.title.app","App name")
                 Text(title).font(Geist.font(11)).foregroundStyle(Ink.secondary).lineLimit(1).truncationMode(.middle).help(title).feedbackTarget("editor.title.recording","Recording name")
-            }.frame(maxWidth: 300, alignment: .leading).feedbackTarget("editor.title","Project title")
+            }.accessibilityElement(children:.contain).frame(maxWidth: 300, alignment: .leading).feedbackTarget("editor.title","Project title")
             Spacer(minLength: 8)
             if capture.recording {
                 Button { Task { await capture.stop() } } label: { Label("Stop recording", systemImage: "stop.circle.fill") }
@@ -53,7 +54,7 @@ struct StudioView: View {
             }
             IconButton(symbol: "square.and.arrow.down", title: "Import video (⌘I)", action: editor.importVideo).disabled(locked)
             Menu {
-                Button("Open Project…", action: editor.openProject)
+                Button("Open Recording or Project…", action: editor.openProject)
                 Button("Save Project…", action: editor.saveProject).disabled(editor.project == nil)
                 Button("Open Demo Project") { Task { await editor.loadDemo() } }
                 Divider()
