@@ -151,7 +151,7 @@ struct RecordingSheet: View {
         VStack(alignment: .leading, spacing: 20) {
             HStack { Text("New recording").font(Geist.font(21, .semibold)); Spacer(); IconButton(symbol: "xmark", title: "Close") { dismiss() } }
             VStack(alignment:.leading,spacing:12) {
-                HStack { Image(systemName:capture.hasSource ? "checkmark.circle" : "display").foregroundStyle(theme.accent);Text(capture.sourceSummary).font(Geist.font(12,.medium)).fixedSize(horizontal:false,vertical:true);Spacer();InfoHint(title:"Recording source",text:"Record a screen, one app window, or a selected area of a display. Size follows the selected source. If macOS requires it, choose the source in its sharing picker to authorize this session.") }
+                HStack { Image(systemName:capture.hasSource ? "checkmark.circle" : "display").foregroundStyle(theme.accent);Text(capture.selectionStatus ?? capture.sourceSummary).font(Geist.font(12,.medium)).fixedSize(horizontal:false,vertical:true);Spacer();InfoHint(title:"Recording source",text:"Record a screen, one app window, or a selected area of a display. Size follows the selected source. If macOS requires it, choose the source in its sharing picker to authorize this session.") }
                 HStack(spacing:8) {
                     Button(capture.hasSource ? "Change source…" : "Choose source…") { capture.chooseSource() }.buttonStyle(StudioButtonStyle()).feedbackTarget("recording.source","Recording source")
                     Button("Select area…") { capture.chooseArea() }.buttonStyle(StudioButtonStyle()).disabled(!capture.supportsArea).help("Drag an area of one display. Requires macOS 15.2 or later.").feedbackTarget("recording.area","Select recording area")

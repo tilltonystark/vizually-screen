@@ -11,7 +11,9 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     @Published var systemAudio=true
     @Published var smoothCursor=true
     @Published var automaticZoom=true
-    @Published var quality: VideoQuality = .efficient
+    @Published var quality: VideoQuality = VideoQuality(rawValue:UserDefaults.standard.string(forKey:"recording.quality") ?? "") ?? .efficient {
+        didSet { UserDefaults.standard.set(quality.rawValue,forKey:"recording.quality") }
+    }
     @Published var error: String?
     @Published var sourceSummary="No source selected"
     @Published var hasSource=false
@@ -23,30 +25,49 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     var onFinish: ((CaptureResult)->Void)?
     private var filter: SCContentFilter?
     private var selectedArea:CGRect?
-    private var wantsArea=false
+    @Published var selectionStatus:String?
+    private var pendingArea:(displayID:CGDirectDisplayID,rect:CGRect)?
     private let areaSelector=AreaSelector()
     var supportsArea:Bool { if #available(macOS 15.2,*) { return true };return false }
     func chooseArea() {
         guard supportsArea,!recording,!busy,!picking else { return }
-        wantsArea=true
-        if let filter,filter.style == .display { presentArea(for:filter) }
-        else { chooseSource(area:true) }
-    }
-    private func presentArea(for candidate:SCContentFilter) {
-        guard #available(macOS 15.2,*),let display=candidate.includedDisplays.first,
-              let screen=NSScreen.screens.first(where:{ ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == display.displayID }) else {
-            picking=false;wantsArea=false;error="That display is no longer available. Choose the area again.";return
-        }
-        picking=true
-        areaSelector.present(on:screen,pixelScale:Double(candidate.pointPixelScale)) { [weak self] rect in
+        error=nil;picking=true;selectionStatus="Drag to select an area. Esc cancels."
+        areaSelector.present(on:NSScreen.screens) { [weak self] choice in
             guard let self else { return }
-            self.wantsArea=false;self.picking=false
-            guard let rect else { return }
-            self.applySource(candidate)
-            self.selectedArea=rect
-            let size=VideoQuality.nativeSize(points:rect.size,scale:Double(candidate.pointPixelScale))
-            self.sourceSummary="Selected area · \(size.0) × \(size.1)"
+            guard let (screen,rect)=choice,
+                  let number=screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
+                self.picking=false;self.selectionStatus=nil;return
+            }
+            let id=number.uint32Value
+            self.pendingArea=(id,rect)
+            if #available(macOS 15.2,*),let filter=self.filter,filter.style == .display,filter.includedDisplays.first?.displayID == id {
+                self.acceptAreaSource(filter);return
+            }
+            self.selectionStatus="Area selected. Share this display in the macOS picker to continue."
+            Task { @MainActor in
+                // Existing permission may allow authorizing the exact chosen display without another picker.
+                if CGPreflightScreenCaptureAccess(),
+                   let content=try? await SCShareableContent.excludingDesktopWindows(false,onScreenWindowsOnly:true),
+                   let display=content.displays.first(where: { $0.displayID == id }),
+                   self.pendingArea?.displayID == id {
+                    let filter=SCContentFilter(display:display,excludingApplications:content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier },exceptingWindows:[])
+                    self.acceptAreaSource(filter)
+                } else if self.pendingArea != nil { self.chooseSource(area:true) }
+            }
         }
+    }
+    private func acceptAreaSource(_ candidate:SCContentFilter) {
+        guard #available(macOS 15.2,*),let pendingArea,
+              candidate.style == .display,candidate.includedDisplays.first?.displayID == pendingArea.displayID else {
+            self.pendingArea=nil;picking=false;selectionStatus=nil
+            error="The shared display does not match your selected area. Choose the area again and share that display.";return
+        }
+        let rect=pendingArea.rect
+        self.pendingArea=nil
+        applySource(candidate)
+        selectedArea=rect
+        let size=VideoQuality.nativeSize(points:rect.size,scale:Double(candidate.pointPixelScale))
+        sourceSummary="Selected area · \(size.0) × \(size.1)"
     }
     private func captureBounds(_ filter:SCContentFilter) -> CGRect {
         guard let selectedArea else { return sourceBounds(filter) }
@@ -64,7 +85,8 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     }
     func chooseSource(area:Bool=false) {
         guard !recording,!busy else { return }
-        error=nil;picking=true;wantsArea=area
+        error=nil;picking=true
+        if !area { pendingArea=nil;selectionStatus="Choose a screen or window in the macOS picker." }
         let picker=SCContentSharingPicker.shared
         var config=SCContentSharingPickerConfiguration()
         config.allowedPickerModes=area ? [.singleDisplay]:[.singleDisplay,.singleWindow]
@@ -90,7 +112,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
         return filter.contentRect
     }
     private func applySource(_ filter:SCContentFilter) {
-        self.filter=filter;selectedArea=nil;hasSource=true;picking=false;error=nil
+        self.filter=filter;selectedArea=nil;hasSource=true;picking=false;selectionStatus=nil;error=nil
         let size=VideoQuality.nativeSize(points:sourceBounds(filter).size,scale:Double(filter.pointPixelScale))
         let name:String
         if #available(macOS 15.2,*),filter.style == .window { name=filter.includedWindows.first?.title ?? "Selected window" }
@@ -158,15 +180,15 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
             cleanup();onFinish?(result)
         } catch { fail(error) }
     }
-    private func cleanup() { sessionID=UUID();recordingTimer?.invalidate();recordingTimer=nil;began=nil;cursorTimer?.invalidate();cursorTimer=nil;stream=nil;output=nil;recording=false;busy=false;stopping=false;filter=nil;selectedArea=nil;wantsArea=false;areaSelector.cancel();hasSource=false;sourceSummary="Choose a source for the next recording";SCContentSharingPicker.shared.isActive=false }
+    private func cleanup() { sessionID=UUID();recordingTimer?.invalidate();recordingTimer=nil;began=nil;cursorTimer?.invalidate();cursorTimer=nil;stream=nil;output=nil;recording=false;busy=false;stopping=false;filter=nil;selectedArea=nil;pendingArea=nil;selectionStatus=nil;areaSelector.cancel();hasSource=false;sourceSummary="Choose a source for the next recording";SCContentSharingPicker.shared.isActive=false }
     private func fail(_ error: Error) {
         output?.cancel();self.error="\(error.localizedDescription)\n\((error as NSError).domain) (\((error as NSError).code)). Select the source again with the macOS picker. If macOS still refuses, quit Vizually Screen and re-enable this build in Screen & System Audio Recording."
         cleanup()
     }
-    nonisolated func contentSharingPicker(_ picker:SCContentSharingPicker,didCancelFor stream:SCStream?) { Task { @MainActor in self.picking=false;self.wantsArea=false } }
+    nonisolated func contentSharingPicker(_ picker:SCContentSharingPicker,didCancelFor stream:SCStream?) { Task { @MainActor in self.picking=false;self.pendingArea=nil;self.selectionStatus=nil } }
     nonisolated func contentSharingPicker(_ picker:SCContentSharingPicker,didUpdateWith filter:SCContentFilter,for stream:SCStream?) {
         Task { @MainActor in
-            if self.wantsArea { self.presentArea(for:filter) } else { self.applySource(filter) }
+            if self.pendingArea != nil { self.acceptAreaSource(filter) } else { self.applySource(filter) }
         }
     }
     nonisolated func contentSharingPickerStartDidFailWithError(_ error:Error) { Task { @MainActor in self.picking=false;self.fail(error) } }

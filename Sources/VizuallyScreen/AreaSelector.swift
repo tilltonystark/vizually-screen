@@ -3,23 +3,40 @@ import VizuallyScreenCore
 
 @MainActor
 final class AreaSelector {
-    private var panel: AreaPanel?
-    func present(on screen:NSScreen, pixelScale:Double, completion:@escaping (CGRect?)->Void) {
+    private var panels:[AreaPanel]=[]
+    func present(on screens:[NSScreen], completion:@escaping ((NSScreen,CGRect)?)->Void) {
         cancel()
-        let panel=AreaPanel(contentRect:screen.frame,styleMask:.borderless,backing:.buffered,defer:false)
-        panel.isReleasedWhenClosed=false;panel.isOpaque=false;panel.backgroundColor = .clear
-        panel.level = .screenSaver;panel.hasShadow=false
-        panel.collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary]
-        let view=AreaSelectionView(frame:CGRect(origin:.zero,size:screen.frame.size))
-        view.pixelScale=pixelScale
-        view.finish={ [weak self] rect in
-            self?.panel?.orderOut(nil);self?.panel?.close();self?.panel=nil
-            completion(rect)
+        for screen in screens {
+            let panel=AreaPanel(contentRect:screen.frame,styleMask:.borderless,backing:.buffered,defer:false)
+            panel.isReleasedWhenClosed=false;panel.isOpaque=false;panel.backgroundColor = .clear
+            panel.level = .statusBar;panel.hasShadow=false;panel.hidesOnDeactivate=false
+            panel.worksWhenModal=true;panel.becomesKeyOnlyIfNeeded=false
+            panel.isMovable=false;panel.isMovableByWindowBackground=false
+            panel.collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary]
+            let view=AreaSelectionView(frame:CGRect(origin:.zero,size:screen.frame.size))
+            view.wantsLayer=true
+            view.setAccessibilityElement(true)
+            view.setAccessibilityRole(.group)
+            view.setAccessibilityLabel("Select recording area. Drag a rectangle; Escape cancels.")
+            view.pixelScale=screen.backingScaleFactor
+            view.finish={ [weak self] rect in
+                self?.cancel()
+                completion(rect.map { (screen,$0) })
+            }
+            panel.contentView=view;panels.append(panel)
+            panel.orderFrontRegardless()
+            view.needsDisplay=true
+            panel.displayIfNeeded()
         }
-        panel.contentView=view;self.panel=panel
-        panel.makeKeyAndOrderFront(nil);panel.makeFirstResponder(view)
+        NSApp.activate(ignoringOtherApps:true)
+        let active=panels.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? panels.first
+        active?.makeKeyAndOrderFront(nil)
+        if let active { active.makeFirstResponder(active.contentView) }
     }
-    func cancel() { panel?.orderOut(nil);panel?.close();panel=nil }
+    func cancel() {
+        let previous=panels;panels=[]
+        for panel in previous { panel.orderOut(nil);panel.close() }
+    }
 }
 private final class AreaPanel:NSPanel { override var canBecomeKey:Bool { true } }
 private final class AreaSelectionView:NSView {
@@ -29,6 +46,7 @@ private final class AreaSelectionView:NSView {
     private var selection:CGRect?
     override var isFlipped:Bool { true }
     override var acceptsFirstResponder:Bool { true }
+    override func acceptsFirstMouse(for event:NSEvent?) -> Bool { true }
     override func resetCursorRects() { addCursorRect(bounds,cursor:.crosshair) }
     override func mouseDown(with event:NSEvent) {
         start=convert(event.locationInWindow,from:nil);selection=nil;needsDisplay=true
