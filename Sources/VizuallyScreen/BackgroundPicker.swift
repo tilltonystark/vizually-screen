@@ -14,7 +14,7 @@ struct BackgroundPicker:View {
                 Text("Gradient").tag(CanvasBackground.Kind.gradient)
                 Text("Color").tag(CanvasBackground.Kind.solid)
                 Text("Image").tag(CanvasBackground.Kind.image)
-            }.pickerStyle(.segmented).labelsHidden()
+            }.pickerStyle(.segmented).labelsHidden().feedbackTarget("canvas.background.type","Background type")
             switch category {
             case .gradient:
                 LazyVGrid(columns:Array(repeating:GridItem(.flexible(),spacing:8),count:4),spacing:12) {
@@ -39,8 +39,8 @@ struct BackgroundPicker:View {
                     BackgroundThumbnail(url:URL(fileURLWithPath:background.value)).frame(height:100).clipShape(RoundedRectangle(cornerRadius:8))
                     Text(URL(fileURLWithPath:background.value).deletingPathExtension().lastPathComponent).font(StudioType.caption).foregroundStyle(Ink.secondary).lineLimit(1)
                 }
-                Button("Choose image…",action:editor.chooseBackgroundImage).buttonStyle(StudioButtonStyle()).frame(maxWidth:.infinity,alignment:.leading)
-                Button("macOS wallpapers") { wallpapers=true }.buttonStyle(StudioButtonStyle(quiet:true))
+                Button("Choose image…",action:editor.chooseBackgroundImage).buttonStyle(StudioButtonStyle()).feedbackTarget("canvas.image","Choose background image").frame(maxWidth:.infinity,alignment:.leading)
+                Button("macOS wallpapers") { wallpapers=true }.buttonStyle(StudioButtonStyle(quiet:true)).feedbackTarget("canvas.wallpapers","macOS wallpapers")
                     .popover(isPresented:$wallpapers) { WallpaperPicker { url in editor.setBackgroundImage(url,copy:false);wallpapers=false }.environmentObject(theme) }
             }
         }.disabled(editor.project == nil)
@@ -61,7 +61,7 @@ struct BackgroundPicker:View {
                     .overlay { if selected { Image(systemName:"checkmark.circle.fill").foregroundStyle(.white,theme.accent) } }
                 if showName { Text(name).font(StudioType.swatchLabel).foregroundStyle(Ink.secondary).lineLimit(1) }
             }
-        }.buttonStyle(.plain).accessibilityLabel("\(name) background").accessibilityAddTraits(selected ? .isSelected:[])
+        }.buttonStyle(.plain).feedbackTarget("canvas.swatch.\(name)","\(name) background").accessibilityLabel("\(name) background").accessibilityAddTraits(selected ? .isSelected:[])
     }
 }
 struct BackgroundThumbnail:View {

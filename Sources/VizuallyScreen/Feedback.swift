@@ -16,7 +16,7 @@ extension View {
         transformAnchorPreference(key:FeedbackTargets.self,value:.bounds) { targets,anchor in targets.append(FeedbackTarget(id:id,label:label,file:file,line:line,anchor:anchor)) }
     }
 }
-struct AppFeedback:Codable,Identifiable {
+struct AppFeedback:Codable,Identifiable,Equatable {
     var id:UUID = UUID()
     var created:Date = Date()
     var targetID:String
@@ -32,6 +32,7 @@ struct AppFeedback:Codable,Identifiable {
     var comment:String
     var resolved:Bool = false
     var agentID:String? = nil
+    var agentStatus:String? = nil
 }
 @MainActor final class FeedbackStore:ObservableObject {
     @Published var enabled=false
@@ -51,8 +52,18 @@ struct AppFeedback:Codable,Identifiable {
     }
     func resolve(_ id:UUID) { var updated=items;if let i=updated.firstIndex(where:{$0.id == id}) { updated[i].resolved.toggle();_ = save(updated) } }
     private func save(_ updated:[AppFeedback]) -> Bool {
+        if updated == items { error=nil;return true }
         do { try FileManager.default.createDirectory(at:url.deletingLastPathComponent(),withIntermediateDirectories:true);let encoder=JSONEncoder();encoder.outputFormatting=[.prettyPrinted,.sortedKeys];try encoder.encode(updated).write(to:url,options:.atomic);items=updated;error=nil;return true }
         catch { self.error="Could not save feedback: \(error.localizedDescription)";return false }
+    }
+    private func saveReceipts(_ received:[AppFeedback]) {
+        var merged=items
+        for receipt in received {
+            if let index=merged.firstIndex(where:{$0.id == receipt.id}) {
+                merged[index].agentID=receipt.agentID;merged[index].agentStatus=receipt.agentStatus;merged[index].resolved=receipt.resolved
+            }
+        }
+        _ = save(merged)
     }
     private func request(_ path:String,body:[String:Any]? = nil) async throws -> [String:Any] {
         var request=URLRequest(url:endpoint.appendingPathComponent(path));request.timeoutInterval=3
@@ -73,7 +84,7 @@ struct AppFeedback:Codable,Identifiable {
             for index in updated.indices {
                 if let known=remote.first(where:{ ($0["attributes"] as? [String:String])?["localFeedbackID"] == updated[index].id.uuidString }),let remoteID=known["id"] as? String {
                     updated[index].agentID=remoteID
-                    if let status=known["status"] as? String { updated[index].resolved=status == "resolved" || status == "dismissed" }
+                    if let status=known["status"] as? String { updated[index].agentStatus=status;updated[index].resolved=status == "resolved" || status == "dismissed" }
                 }
                 guard updated[index].agentID == nil,!updated[index].resolved else { continue }
                 let item=updated[index]
@@ -85,17 +96,33 @@ struct AppFeedback:Codable,Identifiable {
                     "attributes":["localFeedbackID":item.id.uuidString,"app":"Vizually Screen","build":item.build,"route":item.route,"playbackTime":item.playbackTime.map(String.init(describing:)) ?? "none"],"kind":"feedback"
                 ])
                 updated[index].agentID=annotation["id"] as? String
+                updated[index].agentStatus="pending"
                 // Persist each receipt so a later failure does not resend successful comments.
-                _ = save(updated)
+                saveReceipts(updated)
             }
-            _ = save(updated)
+            saveReceipts(updated)
         } catch { self.error="Saved locally. Agent connection unavailable. Retry when the local agent is running." }
     }
     func copy() { do { let encoder=JSONEncoder();encoder.outputFormatting=[.prettyPrinted,.sortedKeys];let data=try encoder.encode(items);NSPasteboard.general.clearContents();NSPasteboard.general.setString(String(decoding:data,as:UTF8.self),forType:.string) } catch { self.error=error.localizedDescription } }
 }
+struct FeedbackSurface:ViewModifier {
+    @ObservedObject var store:FeedbackStore
+    @ObservedObject var editor:Editor
+    var route:String
+    func body(content:Content) -> some View {
+        content.padding(.bottom,["recording","export","appearance"].contains(route) ? 76:0).background(.white).feedbackTarget("surface.\(route)",route.capitalized)
+            .overlayPreferenceValue(FeedbackTargets.self) { targets in
+                GeometryReader { geometry in FeedbackOverlay(store:store,editor:editor,route:route,targets:targets,geometry:geometry) }
+            }
+    }
+}
+extension View {
+    func feedbackSurface(store:FeedbackStore,editor:Editor,route:String) -> some View { modifier(FeedbackSurface(store:store,editor:editor,route:route)) }
+}
 struct FeedbackOverlay:View {
     @ObservedObject var store:FeedbackStore
     @ObservedObject var editor:Editor
+    var route:String
     var targets:[FeedbackTarget]
     var geometry:GeometryProxy
     @State private var pointer:CGPoint?
@@ -103,69 +130,125 @@ struct FeedbackOverlay:View {
     @State private var pin=CGPoint.zero
     @State private var comment=""
     @State private var pinnedTime:Double?
-    @State private var showList=false
-    @FocusState private var writing:Bool
     private func target(at point:CGPoint) -> FeedbackTarget? {
         targets.filter { geometry[$0.anchor].contains(point) }.min { let a=geometry[$0.anchor],b=geometry[$1.anchor];return a.width*a.height < b.width*b.height }
     }
     private var dialogPosition:CGPoint {
-        CGPoint(x:min(max(pin.x+176,176),geometry.size.width-176),y:min(max(pin.y+125,170),geometry.size.height-130))
+        CGPoint(x:min(max(pin.x+176,176),geometry.size.width-176),y:min(max(pin.y+125,150),geometry.size.height-130))
+    }
+    private var fabRect:CGRect { CGRect(x:geometry.size.width-72,y:geometry.size.height-84,width:56,height:56) }
+    private var exclusions:[CGRect] {
+        var rects=[fabRect.insetBy(dx:-8,dy:-8)]
+        if selected != nil { rects.append(CGRect(x:dialogPosition.x-176,y:dialogPosition.y-125,width:352,height:250)) }
+        return rects
+    }
+    private var status:(String,Color) {
+        guard !store.items.isEmpty else { return ("Comment on this app (C)",Ink.muted) }
+        let open=store.items.filter{!$0.resolved}
+        if open.isEmpty { return ("Completed",.green) }
+        if open.contains(where:{$0.agentStatus == "acknowledged"}) { return ("Agent working",.blue) }
+        return (open.contains(where:{$0.agentID == nil}) ? "Waiting to connect · saved locally":"Queued for agent",.orange)
     }
     var body:some View {
-        ZStack(alignment:.bottomLeading) {
-            if store.enabled {
-                Color.white.opacity(0.001).contentShape(Rectangle())
-                    .onContinuousHover { phase in if case let .active(point)=phase { pointer=point } else { pointer=nil } }
-                    .onTapGesture { point in if let target=target(at:point) { selected=target;pin=point;pinnedTime=editor.showsHome ? nil:editor.playhead;comment="";writing=true;showList=false } }
-                if let target=selected ?? pointer.flatMap({target(at:$0)}) {
-                    let rect=geometry[target.anchor]
-                    RoundedRectangle(cornerRadius:5).stroke(.blue,lineWidth:2).background(.blue.opacity(0.06)).frame(width:rect.width,height:rect.height).position(x:rect.midX,y:rect.midY).allowsHitTesting(false)
-                }
-                ForEach(Array(store.items.filter{!$0.resolved && $0.route == (editor.showsHome ? "home":"editor")}.enumerated()),id:\.element.id) { index,item in
-                    if let target=targets.first(where:{$0.id == item.targetID}) {
-                        let rect=geometry[target.anchor]
-                        Button { showList=true;selected=nil } label: { Text("\(index+1)").font(Geist.font(11,.semibold)).foregroundStyle(.white).frame(width:26,height:26).background(.blue,in:Circle()).overlay(Circle().stroke(.white,lineWidth:2)) }.buttonStyle(.plain).position(x:rect.minX+rect.width*item.point[0],y:rect.minY+rect.height*item.point[1]).help(item.comment)
-                    }
+        ZStack(alignment:.bottomTrailing) {
+            FeedbackEvents(selecting:store.enabled,exclusions:exclusions,onMove:{ pointer=$0 },onClick:{ point in
+                if let target=target(at:point) { selected=target;pin=point;pinnedTime=route == "editor" ? editor.playhead:nil;comment="" }
+            },onToggle:toggle).frame(maxWidth:.infinity,maxHeight:.infinity)
+            if store.enabled,let target=selected ?? pointer.flatMap({target(at:$0)}) {
+                let rect=geometry[target.anchor]
+                RoundedRectangle(cornerRadius:5).stroke(.blue,lineWidth:2).background(.blue.opacity(0.08)).frame(width:rect.width,height:rect.height).position(x:rect.midX,y:rect.midY).allowsHitTesting(false)
+                if selected == nil {
+                    Text(target.label).font(Geist.font(11,.medium)).padding(.horizontal,8).padding(.vertical,5).foregroundStyle(.white).background(.blue,in:Capsule()).position(x:min(max(rect.midX,90),geometry.size.width-90),y:max(14,rect.minY-14)).allowsHitTesting(false)
                 }
             }
-            HStack(spacing:4) {
-                Button { store.enabled.toggle();selected=nil } label: { Image(systemName:store.enabled ? "bubble.left.fill":"bubble.left").frame(width:32,height:32).foregroundStyle(store.enabled ? Color.blue:Ink.primary) }.keyboardShortcut("f",modifiers:[.command,.shift]).help(store.enabled ? "Exit comment mode (Esc)":"Comment on this app (⌘⇧F)").accessibilityLabel(store.enabled ? "Exit comment mode":"Comment on this app")
-                Button { showList.toggle();selected=nil;Task { await store.sendPending() } } label: { Image(systemName:"list.bullet").frame(width:32,height:32) }.help("Saved feedback").accessibilityLabel("Saved feedback")
-            }.buttonStyle(.plain).padding(4).background(.white,in:Capsule()).overlay(Capsule().strokeBorder(.black.opacity(0.1),lineWidth:0.5)).shadow(color:.black.opacity(0.08),radius:8,y:2).padding(.leading,20).padding(.bottom,36)
+            Button(action:toggle) {
+                Image(systemName:store.enabled ? "bubble.left.fill":"bubble.left").font(.system(size:19,weight:.medium)).foregroundStyle(store.enabled ? .white:Ink.primary).frame(width:48,height:48).background(store.enabled ? Color.blue:.white,in:Circle()).overlay(Circle().strokeBorder(.black.opacity(0.1),lineWidth:0.5))
+                    .overlay(alignment:.topTrailing) { Circle().fill(status.1).frame(width:10,height:10).overlay(Circle().stroke(.white,lineWidth:2)).accessibilityHidden(true) }
+            }.buttonStyle(.plain).shadow(color:.black.opacity(0.12),radius:10,y:4).help("\(status.0) · C toggles comment mode").accessibilityLabel(store.enabled ? "Exit comment mode":"Comment on this app").accessibilityValue(status.0).padding(.trailing,20).padding(.bottom,32)
             if let target=selected {
                 VStack(alignment:.leading,spacing:12) {
                     HStack { Text(target.label).font(StudioType.controlLabel).lineLimit(1);Spacer();Button { selected=nil } label: { Image(systemName:"xmark") }.buttonStyle(.plain).accessibilityLabel("Cancel comment") }
-                    TextEditor(text:$comment).font(Geist.font(13)).focused($writing).frame(height:88).padding(6).background(Ink.soft,in:RoundedRectangle(cornerRadius:6)).accessibilityLabel("Feedback comment")
-                    HStack { Text("Only this app's UI context").font(Geist.font(10)).foregroundStyle(Ink.secondary);Spacer();Button("Send to agent") { save(target) }.buttonStyle(StudioButtonStyle(primary:true)).disabled(comment.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || store.syncing) }
+                    FeedbackInput(text:$comment) { submit(target) }.frame(height:88).padding(6).background(Ink.soft,in:RoundedRectangle(cornerRadius:6))
+                    HStack { Text("Enter to send · Shift↵ new line").font(Geist.font(10)).foregroundStyle(Ink.secondary);Spacer();Button("Send") { submit(target) }.buttonStyle(StudioButtonStyle(primary:true)).disabled(comment.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty) }
+                    if let error=store.error { Text(error).font(StudioType.caption).foregroundStyle(.red) }
                 }.padding(16).frame(width:320).background(.white,in:RoundedRectangle(cornerRadius:12)).overlay { RoundedRectangle(cornerRadius:12).strokeBorder(.black.opacity(0.12),lineWidth:0.5) }.shadow(color:.black.opacity(0.12),radius:18,y:6).position(dialogPosition)
                 Circle().fill(.blue).frame(width:12,height:12).overlay(Circle().stroke(.white,lineWidth:2)).position(pin).allowsHitTesting(false)
             }
-            if showList {
-                VStack(alignment:.leading,spacing:12) {
-                    HStack { Text("App feedback").font(StudioType.controlLabel);Spacer();Button { showList=false } label: { Image(systemName:"xmark") }.buttonStyle(.plain).accessibilityLabel("Close feedback list") }
-                    if store.items.isEmpty { Text("Turn on comment mode, then click any area.").font(StudioType.caption) }
-                    ScrollView {
-                        LazyVStack(alignment:.leading,spacing:16) {
-                            ForEach(store.items) { item in
-                                VStack(alignment:.leading,spacing:6) {
-                                    Text(item.targetLabel).font(StudioType.controlLabel)
-                                    Text(item.comment).font(StudioType.caption).textSelection(.enabled)
-                                    Text(item.resolved ? "Resolved":item.agentID == nil ? "Saved · waiting to send":"Sent to agent").font(Geist.font(11)).foregroundStyle(Ink.secondary)
-                                    Divider()
-                                }
-                            }
-                        }
-                    }.frame(height:230)
-                    HStack { Button(store.syncing ? "Sending…":"Retry / refresh") { Task { await store.sendPending() } }.disabled(store.syncing);Spacer();Button("Copy",action:store.copy) }.font(StudioType.caption)
-                    if let error=store.error { Text(error).font(StudioType.caption).foregroundStyle(.red) }
-                }.padding(16).frame(width:300).background(.white,in:RoundedRectangle(cornerRadius:12)).overlay { RoundedRectangle(cornerRadius:12).strokeBorder(.black.opacity(0.1),lineWidth:0.5) }.shadow(color:.black.opacity(0.1),radius:16,y:4).padding(.leading,20).padding(.bottom,90)
+        }.onChange(of:store.enabled) { _,enabled in if enabled { editor.player.pause() } else { selected=nil;pointer=nil } }
+        .onExitCommand { selected=nil;store.enabled=false }
+        .task {
+            while !Task.isCancelled {
+                if !store.items.isEmpty { await store.sendPending() }
+                try? await Task.sleep(nanoseconds:3_000_000_000)
             }
-        }.onChange(of:store.enabled) { _,enabled in if enabled { editor.player.pause() } }
-        .onExitCommand { selected=nil;store.enabled=false;showList=false }
+        }
     }
-    private func save(_ target:FeedbackTarget) {
+    private func toggle() { store.enabled.toggle();selected=nil;pointer=nil }
+    private func submit(_ target:FeedbackTarget) {
+        guard !comment.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else { return }
         let rect=geometry[target.anchor]
-        let item=AppFeedback(targetID:target.id,targetLabel:target.label,sourceFile:target.file,sourceLine:target.line,route:editor.showsHome ? "home":"editor",playbackTime:pinnedTime,bounds:[rect.minX,rect.minY,rect.width,rect.height],point:[(pin.x-rect.minX)/max(1,rect.width),(pin.y-rect.minY)/max(1,rect.height)],viewport:[geometry.size.width,geometry.size.height],build:Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "development",comment:comment.trimmingCharacters(in:.whitespacesAndNewlines))
-        if store.add(item) { selected=nil;comment="";showList=true;Task { await store.sendPending() } }
+        let item=AppFeedback(targetID:target.id,targetLabel:target.label,sourceFile:target.file,sourceLine:target.line,route:route,playbackTime:pinnedTime,bounds:[rect.minX,rect.minY,rect.width,rect.height],point:[(pin.x-rect.minX)/max(1,rect.width),(pin.y-rect.minY)/max(1,rect.height)],viewport:[geometry.size.width,geometry.size.height],build:Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "development",comment:comment.trimmingCharacters(in:.whitespacesAndNewlines))
+        if store.add(item) { selected=nil;comment="";Task { await store.sendPending() } }
+    }
+}
+
+/// Use one AppKit coordinate conversion for input and geometry. Transparent to
+/// normal interaction; only selection clicks outside our draft/FAB are consumed.
+struct FeedbackEvents:NSViewRepresentable {
+    var selecting:Bool
+    var exclusions:[CGRect]
+    var onMove:(CGPoint?)->Void
+    var onClick:(CGPoint)->Void
+    var onToggle:()->Void
+    func makeNSView(context:Context) -> EventView { let view=EventView();view.config=self;return view }
+    func updateNSView(_ view:EventView,context:Context) { view.config=self }
+    final class EventView:NSView {
+        var config:FeedbackEvents?
+        private var monitor:Any?
+        override var isFlipped:Bool { true }
+        override func hitTest(_ point:NSPoint) -> NSView? { nil }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let monitor { NSEvent.removeMonitor(monitor);self.monitor=nil }
+            guard let window else { return };window.acceptsMouseMovedEvents=true
+            monitor=NSEvent.addLocalMonitorForEvents(matching:[.mouseMoved,.leftMouseDown,.keyDown]) { [weak self] event in
+                guard let self,let config=self.config,event.window === self.window else { return event }
+                if event.type == .keyDown {
+                    let typing=(self.window?.firstResponder as? NSTextView)?.isEditable == true || self.window?.firstResponder is NSTextField
+                    if !typing,!event.isARepeat,event.modifierFlags.intersection([.command,.control,.option]).isEmpty,event.charactersIgnoringModifiers?.lowercased() == "c" { config.onToggle();return nil }
+                    return event
+                }
+                guard config.selecting else { return event }
+                let point=self.convert(event.locationInWindow,from:nil)
+                guard self.bounds.contains(point),!config.exclusions.contains(where:{$0.contains(point)}) else { if event.type == .mouseMoved { config.onMove(nil) };return event }
+                if event.type == .mouseMoved { config.onMove(point);return nil }
+                config.onClick(point);return nil
+            }
+        }
+        deinit { if let monitor { NSEvent.removeMonitor(monitor) } }
+    }
+}
+struct FeedbackInput:NSViewRepresentable {
+    @Binding var text:String
+    var submit:()->Void
+    func makeNSView(context:Context) -> NSScrollView {
+        let scroll=NSScrollView();scroll.drawsBackground=false;scroll.hasVerticalScroller=true
+        let input=InputView(frame:NSRect(x:0,y:0,width:288,height:88));input.minSize = .zero;input.maxSize=NSSize(width:CGFloat.greatestFiniteMagnitude,height:CGFloat.greatestFiniteMagnitude);input.isRichText=false;input.drawsBackground=false;input.font=NSFont(name:"Geist-Regular",size:13) ?? NSFont.systemFont(ofSize:13);input.textContainerInset=NSSize(width:5,height:5)
+        input.isVerticallyResizable=true;input.isHorizontallyResizable=false;input.autoresizingMask=[.width];input.textContainer?.widthTracksTextView=true
+        input.delegate=context.coordinator;input.onSubmit=submit;input.setAccessibilityLabel("Feedback comment")
+        scroll.documentView=input
+        DispatchQueue.main.async { input.window?.makeFirstResponder(input) }
+        return scroll
+    }
+    func updateNSView(_ scroll:NSScrollView,context:Context) { context.coordinator.parent=self;if let input=scroll.documentView as? InputView { if input.string != text { input.string=text };input.onSubmit=submit } }
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    final class Coordinator:NSObject,NSTextViewDelegate {
+        var parent:FeedbackInput
+        init(_ parent:FeedbackInput) { self.parent=parent }
+        func textDidChange(_ notification:Notification) { if let view=notification.object as? NSTextView { parent.text=view.string } }
+    }
+    final class InputView:NSTextView {
+        var onSubmit:(()->Void)?
+        override func keyDown(with event:NSEvent) { if [36,76].contains(event.keyCode),!event.modifierFlags.contains(.shift) { onSubmit?() } else { super.keyDown(with:event) } }
     }
 }

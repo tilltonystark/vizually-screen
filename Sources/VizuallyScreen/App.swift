@@ -6,12 +6,13 @@ struct VizuallyScreenApp: App {
     @StateObject private var editor = Editor()
     @StateObject private var capture = Capture()
     @StateObject private var theme = StudioTheme()
+    @StateObject private var feedback = FeedbackStore()
     init() { Geist.register() }
     private var locked: Bool { editor.busy || capture.recording || capture.busy }
     var body: some Scene {
         WindowGroup("Vizually Screen") {
             WorkspaceView(editor: editor, capture: capture)
-                .environmentObject(theme)
+                .environmentObject(theme).environmentObject(feedback)
                 .font(Geist.font()).foregroundStyle(Ink.primary)
                 .frame(minWidth: 1080, minHeight: 740)
                 .preferredColorScheme(.light)
@@ -38,7 +39,7 @@ struct VizuallyScreenApp: App {
             }
         }
         Window("Appearance Lab", id: "appearance-lab") {
-            AppearanceLab().environmentObject(theme).font(Geist.font()).foregroundStyle(Ink.primary).preferredColorScheme(.light)
+            AppearanceLab().feedbackSurface(store:feedback,editor:editor,route:"appearance").environmentObject(theme).font(Geist.font()).foregroundStyle(Ink.primary).preferredColorScheme(.light)
         }.defaultSize(width: 660, height: 690).windowResizability(.contentSize)
         MenuBarExtra("Vizually Screen", systemImage: capture.recording ? "record.circle.fill" : "viewfinder") {
             if capture.recording { Button("Stop Recording") { Task { await capture.stop() } }.disabled(capture.busy) }

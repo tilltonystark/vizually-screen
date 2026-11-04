@@ -12,7 +12,7 @@ struct InfoHint: View {
         Button { pinned.toggle();showing=pinned } label: {
             Image(systemName:"info.circle").font(StudioType.helpIcon).foregroundStyle(Ink.secondary)
                 .frame(width:StudioLayout.helpTarget,height:StudioLayout.helpTarget).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityLabel("About \(title)").accessibilityHint(text)
+        }.buttonStyle(.plain).feedbackTarget("hint.\(title)","About \(title)").accessibilityLabel("About \(title)").accessibilityHint(text)
             .onHover { inside in
                 hoverTask?.cancel()
                 if inside { hoverTask=Task { @MainActor in

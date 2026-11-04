@@ -6,6 +6,7 @@ struct StudioView: View {
     @ObservedObject var editor: Editor
     @ObservedObject var capture: Capture
     @EnvironmentObject var theme: StudioTheme
+    @EnvironmentObject var feedback:FeedbackStore
     @Environment(\.openWindow) private var openWindow
     @Binding var showRecording:Bool
     @State private var showExport = false
@@ -31,10 +32,9 @@ struct StudioView: View {
             statusBar
         }
         .background(Color.white)
-        .ignoresSafeArea(.container,edges:.top)
         .background(WindowChrome())
         .tint(theme.accent)
-        .sheet(isPresented: $showExport) { ExportSheet(editor:editor).environmentObject(theme).font(Geist.font()).preferredColorScheme(.light) }
+        .sheet(isPresented: $showExport) { ExportSheet(editor:editor).feedbackSurface(store:feedback,editor:editor,route:"export").environmentObject(theme).font(Geist.font()).preferredColorScheme(.light) }
         .onChange(of: editor.selectedZoomID) { _, value in if value != nil { inspectorTab = "Zoom" } }
     }
     private var toolbar: some View {
@@ -43,13 +43,13 @@ struct StudioView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Vizually Screen").font(Geist.font(13, .semibold))
                 Text(title).font(Geist.font(11)).foregroundStyle(Ink.secondary).lineLimit(1).truncationMode(.middle).help(title)
-            }.frame(maxWidth: 300, alignment: .leading)
+            }.frame(maxWidth: 300, alignment: .leading).feedbackTarget("editor.title","Project title")
             Spacer(minLength: 8)
             if capture.recording {
                 Button { Task { await capture.stop() } } label: { Label("Stop recording", systemImage: "stop.circle.fill") }
                     .buttonStyle(StudioButtonStyle(primary: true)).disabled(capture.busy)
             } else {
-                Button { showRecording = true } label: { Label("Record", systemImage: "record.circle") }.buttonStyle(StudioButtonStyle()).disabled(locked)
+                Button { showRecording = true } label: { Label("Record", systemImage: "record.circle") }.buttonStyle(StudioButtonStyle()).disabled(locked).feedbackTarget("editor.record","Record")
             }
             IconButton(symbol: "square.and.arrow.down", title: "Import video (⌘I)", action: editor.importVideo).disabled(locked)
             Menu {
@@ -58,7 +58,7 @@ struct StudioView: View {
                 Button("Open Demo Project") { Task { await editor.loadDemo() } }
                 Divider()
                 Button("Appearance Lab…") { openWindow(id: "appearance-lab") }
-            } label: { Image(systemName: "ellipsis").frame(width: 40, height: 40) }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Project actions").disabled(locked)
+            } label: { Image(systemName: "ellipsis").frame(width: 40, height: 40) }.feedbackTarget("editor.actions","Project actions").menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Project actions").disabled(locked)
             Button { showExport=true } label: { HStack(spacing: 8) { Text("Export video"); Image(systemName: "arrow.up.right") } }
                 .buttonStyle(StudioButtonStyle(primary: true)).disabled(editor.project == nil || locked).feedbackTarget("editor.export","Export video")
         }.padding(.leading,StudioLayout.headerLeading).padding(.trailing,20).frame(height:StudioLayout.headerHeight)
@@ -151,15 +151,15 @@ struct RecordingSheet: View {
             HStack { Text("New recording").font(Geist.font(21, .semibold)); Spacer(); IconButton(symbol: "xmark", title: "Close") { dismiss() } }
             VStack(alignment:.leading,spacing:12) {
                 HStack { Image(systemName:capture.hasSource ? "checkmark.circle" : "display").foregroundStyle(theme.accent);Text(capture.sourceSummary).font(Geist.font(12,.medium)).fixedSize(horizontal:false,vertical:true);Spacer();InfoHint(title:"Recording source",text:"Record a whole screen or choose one app window. Size follows the selected source. If macOS requires it, choose the source in its sharing picker to authorize this session.") }
-                Button(capture.hasSource ? "Change source…" : "Choose source…") { capture.chooseSource() }.buttonStyle(StudioButtonStyle())
+                Button(capture.hasSource ? "Change source…" : "Choose source…") { capture.chooseSource() }.buttonStyle(StudioButtonStyle()).feedbackTarget("recording.source","Recording source")
             }.frame(maxWidth:.infinity,alignment:.leading).padding(18).background(Ink.soft,in:RoundedRectangle(cornerRadius:10))
-            QualityPicker(selection:$capture.quality)
-            HStack { Toggle("Smooth pointer",isOn:$capture.smoothCursor).toggleStyle(.switch).tint(theme.accent).disabled(!capture.supportsSmoothPointer);InfoHint(title:"Smooth pointer",text:"Records movement separately and renders a smooth arrow. Turn off to keep original cursor shapes, such as text selection and resize. Requires macOS 15.2 or later.") }
-            HStack { Toggle("Automatic zoom",isOn:$capture.automaticZoom).toggleStyle(.switch).tint(theme.accent).disabled(!capture.smoothCursor);InfoHint(title:"Automatic zoom",text:"Adds editable zooms where your pointer settles after moving. Requires Smooth pointer. You can adjust or remove each zoom in the editor.") }
-            Toggle("Include system audio", isOn: $capture.systemAudio).toggleStyle(.switch).tint(theme.accent)
+            QualityPicker(selection:$capture.quality).feedbackTarget("recording.quality","Recording quality")
+            HStack { Toggle("Smooth pointer",isOn:$capture.smoothCursor).toggleStyle(.switch).tint(theme.accent).disabled(!capture.supportsSmoothPointer).feedbackTarget("recording.pointer","Smooth pointer");InfoHint(title:"Smooth pointer",text:"Records movement separately and renders a smooth arrow. Turn off to keep original cursor shapes, such as text selection and resize. Requires macOS 15.2 or later.") }
+            HStack { Toggle("Automatic zoom",isOn:$capture.automaticZoom).toggleStyle(.switch).tint(theme.accent).disabled(!capture.smoothCursor).feedbackTarget("recording.zoom","Automatic zoom");InfoHint(title:"Automatic zoom",text:"Adds editable zooms where your pointer settles after moving. Requires Smooth pointer. You can adjust or remove each zoom in the editor.") }
+            Toggle("Include system audio", isOn: $capture.systemAudio).toggleStyle(.switch).tint(theme.accent).feedbackTarget("recording.audio","System audio")
             HStack { Text("Saved to Movies/Vizually Screen").font(Geist.font(12)).foregroundStyle(Ink.secondary);InfoHint(title:"Saved recordings",text:"The original video and its pointer data are saved together in Movies/Vizually Screen. Stop recording from the app or menu bar.") }
             if let error = capture.error { Text(error).font(Geist.font(12)).foregroundStyle(.red).textSelection(.enabled) }
-            HStack { Spacer(); Button("Cancel") { dismiss() }.buttonStyle(StudioButtonStyle()); Button("Start recording") { Task { await capture.start(); if capture.error == nil { dismiss() } } }.buttonStyle(StudioButtonStyle(primary: true)).disabled(!capture.hasSource || capture.busy || capture.picking) }
+            HStack { Spacer(); Button("Cancel") { dismiss() }.buttonStyle(StudioButtonStyle()); Button("Start recording") { Task { await capture.start(); if capture.error == nil { dismiss() } } }.buttonStyle(StudioButtonStyle(primary: true)).disabled(!capture.hasSource || capture.busy || capture.picking).feedbackTarget("recording.start","Start recording") }
         }.padding(28).frame(width: 450).foregroundStyle(Ink.primary).background(.white)
             .task { await capture.prepareDefaultSource() }
     }

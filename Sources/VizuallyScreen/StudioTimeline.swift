@@ -11,7 +11,7 @@ struct StudioTimeline: View {
                 Text("Timeline").font(Geist.font(12, .semibold))
                 Spacer()
                 Text("Source time").font(Geist.font(11)).foregroundStyle(Ink.secondary)
-                Button(action: editor.addZoom) { Label("Add zoom", systemImage: "plus.magnifyingglass") }.buttonStyle(StudioButtonStyle(quiet: true)).disabled(editor.project == nil)
+                Button(action: editor.addZoom) { Label("Add zoom", systemImage: "plus.magnifyingglass") }.buttonStyle(StudioButtonStyle(quiet: true)).disabled(editor.project == nil).feedbackTarget("timeline.addZoom","Add zoom")
             }.padding(.horizontal, 20).frame(height: 45)
             GeometryReader { geometry in
                 let width = max(1, geometry.size.width - labelWidth - 32)
@@ -47,7 +47,7 @@ struct StudioTimeline: View {
                     Rectangle().fill(Ink.line).frame(width: 1, height: i % 2 == 0 ? 6 : 3)
                 }.position(x: CGFloat(i)/8*width, y: 9)
             }
-        }.contentShape(Rectangle()).gesture(DragGesture(minimumDistance: 0).onChanged { v in editor.seek(min(1,max(0,v.location.x/width))*duration) }).accessibilityLabel("Timeline ruler")
+        }.contentShape(Rectangle()).gesture(DragGesture(minimumDistance: 0).onChanged { v in editor.seek(min(1,max(0,v.location.x/width))*duration) }).feedbackTarget("timeline.ruler","Timeline ruler").accessibilityLabel("Timeline ruler")
     }
     private func filmstrip(width: CGFloat, duration: Double) -> some View {
         ZStack(alignment: .leading) {
@@ -67,7 +67,7 @@ struct StudioTimeline: View {
                 RoundedRectangle(cornerRadius: 5).strokeBorder(theme.accent, lineWidth: 2).frame(width: max(1,right-left)).offset(x:left)
             } else { Text("Your video will appear here").font(Geist.font(11)).foregroundStyle(Ink.secondary).padding(.leading, 12) }
         }.clipped().accessibilityElement(children: .ignore).contentShape(Rectangle()).gesture(DragGesture(minimumDistance: 0).onChanged { v in editor.seek(min(1,max(0,v.location.x/width))*duration) })
-        .accessibilityLabel("Video timeline").accessibilityValue(clockText(editor.playhead))
+        .feedbackTarget("timeline.video","Video timeline").accessibilityLabel("Video timeline").accessibilityValue(clockText(editor.playhead))
         .accessibilityAdjustableAction { direction in editor.seek(editor.playhead + (direction == .increment ? 0.1 : -0.1)) }
     }
     private func zoomTrack(width: CGFloat, duration: Double) -> some View {
@@ -82,7 +82,7 @@ struct StudioTimeline: View {
                             .frame(width: max(3,min(zoom.duration,duration-zoom.start)/duration*width), height: 31)
                             .background(selected ? theme.accent : theme.tint, in: RoundedRectangle(cornerRadius: 5)).clipped()
                     }.buttonStyle(.plain).offset(x: zoom.start/duration*width)
-                        .help("Zoom \(index+1) · \(clockText(zoom.start))").accessibilityLabel("Zoom region \(index+1)")
+                        .feedbackTarget("timeline.zoom.\(zoom.id)","Zoom region \(index+1)").help("Zoom \(index+1) · \(clockText(zoom.start))").accessibilityLabel("Zoom region \(index+1)")
                 }
                 if p.zooms.isEmpty { Text("Add a zoom to focus on a detail").font(Geist.font(11)).foregroundStyle(Ink.secondary).padding(.leading, 12).allowsHitTesting(false) }
             }

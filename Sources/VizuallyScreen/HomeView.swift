@@ -6,7 +6,7 @@ struct WorkspaceView:View {
     @ObservedObject var editor:Editor
     @ObservedObject var capture:Capture
     @StateObject private var library=RecordingLibrary()
-    @StateObject private var feedback=FeedbackStore()
+    @EnvironmentObject private var feedback:FeedbackStore
     @EnvironmentObject var theme:StudioTheme
     @State private var showRecording=false
     var body:some View {
@@ -14,9 +14,9 @@ struct WorkspaceView:View {
             if editor.showsHome { HomeView(editor:editor,library:library) { showRecording=true } }
             else { StudioView(editor:editor,capture:capture,showRecording:$showRecording) }
         }
-        .feedbackTarget("workspace", "Workspace")
-        .overlayPreferenceValue(FeedbackTargets.self) { targets in GeometryReader { geometry in FeedbackOverlay(store:feedback,editor:editor,targets:targets,geometry:geometry) } }
-        .sheet(isPresented:$showRecording) { RecordingSheet(capture:capture).environmentObject(theme).font(Geist.font()).preferredColorScheme(.light) }
+        .feedbackSurface(store:feedback,editor:editor,route:editor.showsHome ? "home":"editor")
+        .ignoresSafeArea(.container,edges:.top)
+        .sheet(isPresented:$showRecording) { RecordingSheet(capture:capture).feedbackSurface(store:feedback,editor:editor,route:"recording").environmentObject(theme).font(Geist.font()).preferredColorScheme(.light) }
         .onAppear { editor.onLibraryChange={ source,project in library.register(source,project:project) } }
         .task { await library.refresh() }
         .onChange(of:editor.showsHome) { _,home in if home { Task { await library.refresh() } } }
@@ -79,7 +79,7 @@ struct HomeView:View {
                     }
                 }.padding(32).frame(maxWidth:.infinity,maxHeight:.infinity).background(theme.canvas)
             }
-        }.background(.white).ignoresSafeArea(.container,edges:.top).background(WindowChrome()).disabled(editor.busy)
+        }.background(.white).background(WindowChrome()).disabled(editor.busy)
     }
     private func card(_ entry:RecordingReference) -> some View {
         let detail=library.details[entry.id]

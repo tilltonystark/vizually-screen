@@ -14,7 +14,7 @@ struct ExportSheet: View {
                 ProgressView(value:editor.exportProgress).tint(theme.accent)
                 HStack { Text("\(Int(editor.exportProgress*100))%").monospacedDigit();Spacer();Button("Cancel export",action:editor.cancelExport).buttonStyle(StudioButtonStyle()) }
             } else {
-                QualityPicker(selection:$quality)
+                QualityPicker(selection:$quality).feedbackTarget("export.quality","Export quality")
                 VStack(alignment:.leading,spacing:10) {
                     HStack {
                         Text("\(Int(editor.videoSize.width)) × \(Int(editor.videoSize.height)) · 60 fps").font(Geist.font(13,.medium)).monospacedDigit()
@@ -24,7 +24,7 @@ struct ExportSheet: View {
                     if let p=editor.project { Text(clockText(p.trimEnd-p.trimStart)).font(Geist.font(12)).foregroundStyle(Ink.secondary) }
                 }.padding(16).frame(maxWidth:.infinity,alignment:.leading).background(Ink.soft,in:RoundedRectangle(cornerRadius:10))
                 if quality == .master { Label("Very large file",systemImage:"internaldrive").font(Geist.font(12)).foregroundStyle(Ink.secondary) }
-                HStack { Spacer();Button("Cancel") { dismiss() }.buttonStyle(StudioButtonStyle());Button("Choose location…") { editor.export(quality:quality) }.buttonStyle(StudioButtonStyle(primary:true)) }
+                HStack { Spacer();Button("Cancel") { dismiss() }.buttonStyle(StudioButtonStyle());Button("Choose location…") { editor.export(quality:quality) }.buttonStyle(StudioButtonStyle(primary:true)).feedbackTarget("export.location","Choose export location") }
             }
         }.padding(28).frame(width:450).foregroundStyle(Ink.primary).background(.white)
             .onChange(of:editor.isExporting) { was,now in if was && !now { dismiss() } }
