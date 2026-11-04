@@ -58,10 +58,10 @@ struct StudioView: View {
                 Button("Open Demo Project") { Task { await editor.loadDemo() } }
                 Divider()
                 Button("Appearance Lab…") { openWindow(id: "appearance-lab") }
-            } label: { Image(systemName: "ellipsis").frame(width: 40, height: 40) }.feedbackTarget("editor.actions","Project actions").menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Project actions").disabled(locked)
+            } label: { Image(systemName: "ellipsis").frame(width: 40, height: 40).background(Ink.soft,in:RoundedRectangle(cornerRadius:8)) }.feedbackTarget("editor.actions","Project actions").menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Project actions").disabled(locked)
             Button { showExport=true } label: { HStack(spacing: 8) { Text("Export video"); Image(systemName: "arrow.up.right") } }
                 .buttonStyle(StudioButtonStyle(primary: true)).disabled(editor.project == nil || locked).feedbackTarget("editor.export","Export video")
-        }.padding(.leading,StudioLayout.headerLeading).padding(.trailing,20).frame(height:StudioLayout.headerHeight)
+        }.padding(.leading,StudioLayout.headerLeading).padding(.trailing,20).frame(height:StudioLayout.headerHeight).contentShape(Rectangle()).gesture(WindowDragGesture())
     }
     private var preview: some View {
         ZStack {

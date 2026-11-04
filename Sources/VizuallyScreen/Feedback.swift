@@ -151,8 +151,9 @@ struct FeedbackOverlay:View {
     var body:some View {
         ZStack(alignment:.bottomTrailing) {
             FeedbackEvents(selecting:store.enabled,exclusions:exclusions,onMove:{ pointer=$0 },onClick:{ point in
+                if selected != nil { clearSelection();return }
                 if let target=target(at:point) { selected=target;pin=point;pinnedTime=route == "editor" ? editor.playhead:nil;comment="" }
-            },onToggle:toggle).frame(maxWidth:.infinity,maxHeight:.infinity)
+            },onToggle:toggle,onCancel:{ clearSelection();store.enabled=false }).frame(maxWidth:.infinity,maxHeight:.infinity)
             if store.enabled,let target=selected ?? pointer.flatMap({target(at:$0)}) {
                 let rect=geometry[target.anchor]
                 RoundedRectangle(cornerRadius:5).stroke(.blue,lineWidth:2).background(.blue.opacity(0.08)).frame(width:rect.width,height:rect.height).position(x:rect.midX,y:rect.midY).allowsHitTesting(false)
@@ -174,7 +175,7 @@ struct FeedbackOverlay:View {
                 Circle().fill(.blue).frame(width:12,height:12).overlay(Circle().stroke(.white,lineWidth:2)).position(pin).allowsHitTesting(false)
             }
         }.onChange(of:store.enabled) { _,enabled in if enabled { editor.player.pause() } else { selected=nil;pointer=nil } }
-        .onExitCommand { selected=nil;store.enabled=false }
+        .onExitCommand { clearSelection();store.enabled=false }
         .task {
             while !Task.isCancelled {
                 if !store.items.isEmpty { await store.sendPending() }
@@ -182,7 +183,8 @@ struct FeedbackOverlay:View {
             }
         }
     }
-    private func toggle() { store.enabled.toggle();selected=nil;pointer=nil }
+    private func clearSelection() { selected=nil;pointer=nil;comment="" }
+    private func toggle() { store.enabled.toggle();clearSelection() }
     private func submit(_ target:FeedbackTarget) {
         guard !comment.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else { return }
         let rect=geometry[target.anchor]
@@ -199,6 +201,7 @@ struct FeedbackEvents:NSViewRepresentable {
     var onMove:(CGPoint?)->Void
     var onClick:(CGPoint)->Void
     var onToggle:()->Void
+    var onCancel:()->Void
     func makeNSView(context:Context) -> EventView { let view=EventView();view.config=self;return view }
     func updateNSView(_ view:EventView,context:Context) { view.config=self }
     final class EventView:NSView {
@@ -213,6 +216,7 @@ struct FeedbackEvents:NSViewRepresentable {
             monitor=NSEvent.addLocalMonitorForEvents(matching:[.mouseMoved,.leftMouseDown,.keyDown]) { [weak self] event in
                 guard let self,let config=self.config,event.window === self.window else { return event }
                 if event.type == .keyDown {
+                    if config.selecting,event.keyCode == 53 { config.onCancel();return nil }
                     let typing=(self.window?.firstResponder as? NSTextView)?.isEditable == true || self.window?.firstResponder is NSTextField
                     if !typing,!event.isARepeat,event.modifierFlags.intersection([.command,.control,.option]).isEmpty,event.charactersIgnoringModifiers?.lowercased() == "c" { config.onToggle();return nil }
                     return event

@@ -12,7 +12,7 @@ struct WindowChrome:NSViewRepresentable {
             window.title="Vizually Screen"
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent=true
-            window.isMovableByWindowBackground=true
+            window.isMovableByWindowBackground=false
             if window.toolbar == nil {
                 let toolbar=NSToolbar(identifier:"VizuallyScreen.Header")
                 window.toolbar=toolbar

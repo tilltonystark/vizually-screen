@@ -19,6 +19,7 @@ struct WorkspaceView:View {
         .sheet(isPresented:$showRecording) { RecordingSheet(capture:capture).feedbackSurface(store:feedback,editor:editor,route:"recording").environmentObject(theme).font(Geist.font()).preferredColorScheme(.light) }
         .onAppear { editor.onLibraryChange={ source,project in library.register(source,project:project) } }
         .task { await library.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for:NSApplication.didBecomeActiveNotification)) { _ in Task { await library.refresh() } }
         .onChange(of:editor.showsHome) { _,home in if home { Task { await library.refresh() } } }
         .onChange(of:capture.recording) { _,recording in if recording { editor.player.pause();editor.showsHome=false } }
         .alert("Unable to complete action",isPresented:Binding(get:{editor.error != nil || capture.error != nil},set:{if !$0 {editor.error=nil;capture.error=nil}})) {
@@ -37,31 +38,30 @@ struct HomeView:View {
     var body:some View {
         VStack(spacing:0) {
             HStack(spacing:12) {
-                Image(systemName:"viewfinder").font(.system(size:21,weight:.medium)).foregroundStyle(theme.accent)
                 Text("Vizually Screen").font(Geist.font(15,.semibold)).feedbackTarget("home.title","App name")
                 Spacer()
                 HStack(spacing:8) { Image(systemName:"magnifyingglass").foregroundStyle(Ink.muted);TextField("Search recordings",text:$query).textFieldStyle(.plain).font(StudioType.caption) }.padding(10).frame(width:240).feedbackTarget("home.search","Search recordings").background(Ink.soft,in:RoundedRectangle(cornerRadius:8))
+                IconButton(symbol:"arrow.clockwise",title:"Refresh recordings") { Task { await library.refresh() } }
                 IconButton(symbol:"square.and.arrow.down",title:"Import video",action:editor.importVideo).feedbackTarget("home.import","Import video")
                 Button(action:record) { Label("New recording",systemImage:"record.circle") }.buttonStyle(StudioButtonStyle(primary:true)).feedbackTarget("home.record","New recording").focused($recordFocused)
-            }.padding(.leading,StudioLayout.headerLeading).padding(.trailing,24).frame(height:StudioLayout.headerHeight)
+            }.padding(.leading,StudioLayout.headerLeading).padding(.trailing,24).frame(height:StudioLayout.headerHeight).contentShape(Rectangle()).gesture(WindowDragGesture())
             Rule()
             HStack(spacing:0) {
                 VStack(alignment:.leading,spacing:16) {
-                    Text("LIBRARY").font(Geist.font(10,.medium)).tracking(1).foregroundStyle(Ink.muted)
-                    Label("All recordings",systemImage:"square.grid.2x2").font(StudioType.controlLabel).foregroundStyle(theme.accent).padding(12).frame(maxWidth:.infinity,alignment:.leading).background(theme.tint,in:RoundedRectangle(cornerRadius:8))
-                    Label("On this Mac",systemImage:"internaldrive").font(StudioType.caption).foregroundStyle(Ink.secondary).padding(.horizontal,12)
+                    Text("LIBRARY").feedbackTarget("home.sidebar.heading","Library heading").font(Geist.font(10,.medium)).tracking(1).foregroundStyle(Ink.muted)
+                    Label("All recordings",systemImage:"square.grid.2x2").font(StudioType.controlLabel).foregroundStyle(theme.accent).padding(12).frame(maxWidth:.infinity,alignment:.leading).background(theme.tint,in:RoundedRectangle(cornerRadius:8)).feedbackTarget("home.sidebar.all","All recordings")
+                    Label("On this Mac",systemImage:"internaldrive").font(StudioType.caption).foregroundStyle(Ink.secondary).padding(.horizontal,12).feedbackTarget("home.sidebar.local","On this Mac")
                     Spacer()
-                    Button { Task { await editor.loadDemo() } } label: { Label("Explore demo",systemImage:"play.rectangle") }.buttonStyle(StudioButtonStyle(quiet:true))
-                    Button("Open project…",action:editor.openProject).buttonStyle(StudioButtonStyle(quiet:true))
+                    Button { Task { await editor.loadDemo() } } label: { Label("Explore demo",systemImage:"play.rectangle") }.buttonStyle(StudioButtonStyle(quiet:true)).feedbackTarget("home.sidebar.demo","Explore demo")
+                    Button("Open project…",action:editor.openProject).buttonStyle(StudioButtonStyle(quiet:true)).feedbackTarget("home.sidebar.open","Open project")
                 }.padding(20).frame(width:190).background(.white)
                 Rule(vertical:true)
                 VStack(alignment:.leading,spacing:24) {
-                    HStack(alignment:.firstTextBaseline) {
-                        Text("Recordings").font(Geist.font(26,.semibold)).tracking(-0.6)
-                        Text("\(library.entries.count)").font(StudioType.caption).foregroundStyle(Ink.secondary)
+                    HStack(alignment:.center,spacing:10) {
+                        Text("Recordings").font(Geist.font(26,.semibold)).tracking(-0.6).feedbackTarget("home.recordings.heading","Recordings heading")
+                        Text("\(library.entries.count)").font(Geist.font(12,.medium)).monospacedDigit().foregroundStyle(Ink.secondary).padding(.horizontal,8).frame(minWidth:28,minHeight:28).background(.white,in:Capsule()).overlay(Capsule().strokeBorder(Ink.line,lineWidth:0.5)).feedbackTarget("home.recordings.count","Recording count")
                         Spacer()
                         Text("Most recent").font(StudioType.caption).foregroundStyle(Ink.secondary)
-                        IconButton(symbol:"arrow.clockwise",title:"Refresh recordings") { Task { await library.refresh() } }
                     }
                     if let error=library.error { Label(error,systemImage:"exclamationmark.triangle").font(StudioType.caption).foregroundStyle(.red) }
                     if library.loading && library.entries.isEmpty { ProgressView("Loading recordings…").frame(maxWidth:.infinity,maxHeight:.infinity) }

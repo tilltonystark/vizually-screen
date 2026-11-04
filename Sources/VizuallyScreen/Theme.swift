@@ -118,11 +118,32 @@ struct Rule: View {
     @Environment(\.displayScale) private var scale
     var body: some View { Rectangle().fill(Ink.line).frame(width: vertical ? 1/scale : nil, height: vertical ? nil : 1/scale) }
 }
+struct StudioIconButtonStyle:ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func makeBody(configuration:Configuration) -> some View {
+        IconBody(configuration:configuration,enabled:enabled,reduceMotion:reduceMotion)
+    }
+    private struct IconBody:View {
+        let configuration:Configuration
+        let enabled:Bool
+        let reduceMotion:Bool
+        @State private var hover=false
+        var body:some View {
+            configuration.label.frame(width:40,height:40).foregroundStyle(Ink.primary)
+                .background(hover && enabled ? Color.oklch(0.94,0.003):Ink.soft,in:RoundedRectangle(cornerRadius:8))
+                .opacity(enabled ? 1:0.4).scaleEffect(configuration.isPressed && !reduceMotion ? 0.96:1)
+                .animation(reduceMotion ? nil:.easeOut(duration:0.12),value:configuration.isPressed)
+                .animation(reduceMotion ? nil:.easeOut(duration:0.15),value:hover)
+                .contentShape(RoundedRectangle(cornerRadius:8)).onHover { hover=$0 }
+        }
+    }
+}
 struct IconButton: View {
     let symbol: String
     let title: String
     let action: () -> Void
-    var body: some View { Button(action: action) { Image(systemName: symbol).frame(width: 20) }.buttonStyle(StudioButtonStyle(quiet: true)).help(title).accessibilityLabel(title).feedbackTarget("control.\(symbol)",title) }
+    var body: some View { Button(action: action) { Image(systemName: symbol).frame(width: 20) }.buttonStyle(StudioIconButtonStyle()).help(title).accessibilityLabel(title).feedbackTarget("control.\(symbol)",title) }
 }
 func clockText(_ seconds: Double) -> String {
     let safe = seconds.isFinite ? max(0, seconds) : 0
