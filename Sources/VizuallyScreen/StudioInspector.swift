@@ -33,7 +33,7 @@ struct StudioInspector: View {
     }
     private func heading(_ text: String, detail: String? = nil) -> some View {
         HStack(spacing:StudioLayout.helpGap) {
-            Text(text).font(Geist.font(13, .semibold))
+            Text(text).font(Geist.font(13, .semibold)).feedbackTarget("inspector.heading.\(text)",text)
             if let detail { InfoHint(title:text,text:detail) }
             Spacer()
         }

@@ -41,8 +41,8 @@ struct StudioView: View {
         HStack(spacing: 12) {
             IconButton(symbol:"chevron.left",title:"All recordings",action:editor.returnHome).disabled(locked)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Vizually Screen").font(Geist.font(13, .semibold))
-                Text(title).font(Geist.font(11)).foregroundStyle(Ink.secondary).lineLimit(1).truncationMode(.middle).help(title)
+                Text("Vizually Screen").font(Geist.font(13, .semibold)).feedbackTarget("editor.title.app","App name")
+                Text(title).font(Geist.font(11)).foregroundStyle(Ink.secondary).lineLimit(1).truncationMode(.middle).help(title).feedbackTarget("editor.title.recording","Recording name")
             }.frame(maxWidth: 300, alignment: .leading).feedbackTarget("editor.title","Project title")
             Spacer(minLength: 8)
             if capture.recording {

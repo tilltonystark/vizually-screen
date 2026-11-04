@@ -32,16 +32,17 @@ struct HomeView:View {
     let record:()->Void
     @EnvironmentObject var theme:StudioTheme
     @State private var query=""
+    @FocusState private var recordFocused:Bool
     private var filtered:[RecordingReference] { library.entries.filter { query.isEmpty || URL(fileURLWithPath:$0.sourcePath).lastPathComponent.localizedCaseInsensitiveContains(query) } }
     var body:some View {
         VStack(spacing:0) {
             HStack(spacing:12) {
                 Image(systemName:"viewfinder").font(.system(size:21,weight:.medium)).foregroundStyle(theme.accent)
-                Text("Vizually Screen").font(Geist.font(15,.semibold))
+                Text("Vizually Screen").font(Geist.font(15,.semibold)).feedbackTarget("home.title","App name")
                 Spacer()
                 HStack(spacing:8) { Image(systemName:"magnifyingglass").foregroundStyle(Ink.muted);TextField("Search recordings",text:$query).textFieldStyle(.plain).font(StudioType.caption) }.padding(10).frame(width:240).feedbackTarget("home.search","Search recordings").background(Ink.soft,in:RoundedRectangle(cornerRadius:8))
                 IconButton(symbol:"square.and.arrow.down",title:"Import video",action:editor.importVideo).feedbackTarget("home.import","Import video")
-                Button(action:record) { Label("New recording",systemImage:"record.circle") }.buttonStyle(StudioButtonStyle(primary:true)).feedbackTarget("home.record","New recording")
+                Button(action:record) { Label("New recording",systemImage:"record.circle") }.buttonStyle(StudioButtonStyle(primary:true)).feedbackTarget("home.record","New recording").focused($recordFocused)
             }.padding(.leading,StudioLayout.headerLeading).padding(.trailing,24).frame(height:StudioLayout.headerHeight)
             Rule()
             HStack(spacing:0) {
@@ -52,7 +53,7 @@ struct HomeView:View {
                     Spacer()
                     Button { Task { await editor.loadDemo() } } label: { Label("Explore demo",systemImage:"play.rectangle") }.buttonStyle(StudioButtonStyle(quiet:true))
                     Button("Open project…",action:editor.openProject).buttonStyle(StudioButtonStyle(quiet:true))
-                }.padding(20).padding(.bottom,76).frame(width:190).background(.white)
+                }.padding(20).frame(width:190).background(.white)
                 Rule(vertical:true)
                 VStack(alignment:.leading,spacing:24) {
                     HStack(alignment:.firstTextBaseline) {
@@ -80,6 +81,7 @@ struct HomeView:View {
                 }.padding(32).frame(maxWidth:.infinity,maxHeight:.infinity).background(theme.canvas)
             }
         }.background(.white).background(WindowChrome()).disabled(editor.busy)
+        .defaultFocus($recordFocused,true)
     }
     private func card(_ entry:RecordingReference) -> some View {
         let detail=library.details[entry.id]

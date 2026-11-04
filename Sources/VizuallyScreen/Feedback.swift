@@ -143,11 +143,10 @@ struct FeedbackOverlay:View {
         return rects
     }
     private var status:(String,Color) {
-        guard !store.items.isEmpty else { return ("Comment on this app (C)",Ink.muted) }
-        let open=store.items.filter{!$0.resolved}
-        if open.isEmpty { return ("Completed",.green) }
-        if open.contains(where:{$0.agentStatus == "acknowledged"}) { return ("Agent working",.blue) }
-        return (open.contains(where:{$0.agentID == nil}) ? "Waiting to connect · saved locally":"Queued for agent",.orange)
+        guard let latest=store.items.first else { return ("Comment on this app (C)",Ink.muted) }
+        if latest.resolved { return ("Latest feedback completed",.green) }
+        if latest.agentStatus == "acknowledged" { return ("Agent working on latest feedback",.blue) }
+        return (latest.agentID == nil ? "Waiting to connect · saved locally":"Latest feedback queued",.orange)
     }
     var body:some View {
         ZStack(alignment:.bottomTrailing) {
