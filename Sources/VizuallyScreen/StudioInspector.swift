@@ -5,27 +5,22 @@ import VizuallyScreenCore
 struct StudioInspector<CropPanel: View>: View {
     @ObservedObject var editor: Editor
     @Binding var tab: String
-    let startCrop: () -> Void
     let cropping: Bool
     @ViewBuilder let cropPanel: () -> CropPanel
     @EnvironmentObject var theme: StudioTheme
     var body: some View {
         VStack(spacing: 0) {
-            if cropping {
-                ScrollView { cropPanel().padding(16) }
-            } else {
-                HStack(spacing: 4) {
-                    tabButton("Canvas", icon: "rectangle.on.rectangle")
-                    tabButton("Zoom", icon: "plus.magnifyingglass")
+            if !cropping {
+                HStack(spacing:4) {
+                    tabButton("Canvas",icon:"rectangle.on.rectangle")
+                    tabButton("Zoom",icon:StudioSymbol.zoom)
                 }.padding(10)
-                if editor.project != nil {
-                    Button(action:startCrop) {
-                        Label("Crop video",systemImage:"crop")
-                            .frame(maxWidth:.infinity,alignment:.leading)
-                    }.buttonStyle(StudioButtonStyle()).padding(.horizontal,16).padding(.bottom,12)
-                        .feedbackTarget("editor.crop","Crop video")
-                }
-                Rule()
+            }
+            if editor.project != nil {
+                cropPanel().padding(.horizontal,16).padding(.bottom,12).padding(.top,cropping ? 12:0)
+            }
+            Rule()
+            if !cropping {
                 ScrollView {
                     VStack(alignment:.leading,spacing:24) {
                         if tab == "Canvas" { canvasControls } else { zoomControls }
@@ -36,7 +31,7 @@ struct StudioInspector<CropPanel: View>: View {
                     Button(action:editor.saveProject) { Label("Save project",systemImage:"square.and.arrow.down") }
                         .buttonStyle(StudioButtonStyle(quiet:true)).padding(8)
                 }
-            }
+            } else { Spacer(minLength:0) }
         }.background(.white)
     }
     private func tabButton(_ name: String, icon: String) -> some View {

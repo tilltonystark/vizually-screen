@@ -136,25 +136,31 @@ struct SidebarButtonStyle:ButtonStyle {
         }
     }
 }
-struct StudioIconButtonStyle:ButtonStyle {
+enum StudioSymbol {
+    static let zoom = "plus.magnifyingglass"
+}
+
+struct StudioIconSurface: ViewModifier {
     @Environment(\.isEnabled) private var enabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    func makeBody(configuration:Configuration) -> some View {
-        IconBody(configuration:configuration,enabled:enabled,reduceMotion:reduceMotion)
+    @State private var hover=false
+
+    func body(content:Content) -> some View {
+        content.frame(width:40,height:40).foregroundStyle(Ink.primary)
+            .background(hover && enabled ? Color.oklch(0.94,0.003):Ink.soft,in:RoundedRectangle(cornerRadius:8))
+            .opacity(enabled ? 1:0.4)
+            .animation(reduceMotion ? nil:.easeOut(duration:0.15),value:hover)
+            .contentShape(RoundedRectangle(cornerRadius:8)).onHover { hover=$0 }
     }
-    private struct IconBody:View {
-        let configuration:Configuration
-        let enabled:Bool
-        let reduceMotion:Bool
-        @State private var hover=false
-        var body:some View {
-            configuration.label.frame(width:40,height:40).foregroundStyle(Ink.primary)
-                .background(hover && enabled ? Color.oklch(0.94,0.003):Ink.soft,in:RoundedRectangle(cornerRadius:8))
-                .opacity(enabled ? 1:0.4).scaleEffect(configuration.isPressed && !reduceMotion ? 0.96:1)
-                .animation(reduceMotion ? nil:.easeOut(duration:0.12),value:configuration.isPressed)
-                .animation(reduceMotion ? nil:.easeOut(duration:0.15),value:hover)
-                .contentShape(RoundedRectangle(cornerRadius:8)).onHover { hover=$0 }
-        }
+}
+
+struct StudioIconButtonStyle:ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration:Configuration) -> some View {
+        configuration.label.modifier(StudioIconSurface())
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96:1)
+            .animation(reduceMotion ? nil:.easeOut(duration:0.12),value:configuration.isPressed)
     }
 }
 struct IconButton: View {

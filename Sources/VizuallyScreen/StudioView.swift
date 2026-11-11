@@ -13,11 +13,16 @@ struct StudioView: View {
     @State private var showExport = false
     private var cropping: Bool { editor.cropping }
     @State private var cropSelection = CropControls.full
+    @State private var draftAspect: CropAspect = .freeform
+    @State private var aspectBaseline: CGRect?
     @State private var cropImage: CGImage?
     @State private var cropFrameFailed = false
     @State private var inspectorTab = "Canvas"
     @State private var dropTargeted = false
     private var locked: Bool { editor.busy || capture.recording || capture.busy }
+    private var savedSelection: CGRect { editor.project?.crop?.rect ?? CropControls.full }
+    private var cropAspect: CropAspect { cropping ? draftAspect:(editor.project?.crop?.aspect ?? .freeform) }
+    private var cropRatio: Double? { cropAspect.normalizedRatio(source:editor.sourceVideoSize,current:savedSelection) }
     private var title: String { editor.recordingTitle ?? editor.project.map { URL(fileURLWithPath: $0.sourcePath).deletingPathExtension().lastPathComponent } ?? "Untitled project" }
     var body: some View {
         VStack(spacing: 0) {
@@ -31,11 +36,10 @@ struct StudioView: View {
                     StudioTimeline(editor: editor).disabled(locked || cropping).feedbackTarget("editor.timeline","Timeline")
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 Rule(vertical: true)
-                StudioInspector(editor:editor,tab:$inspectorTab,startCrop:beginCrop,cropping:cropping) {
-                    CropControls(selection:$cropSelection,ready:cropImage != nil,cancel:endCrop) {
-                        editor.applyCrop(cropSelection == CropControls.full ? nil:VideoCrop(cropSelection))
-                        endCrop()
-                    }
+                StudioInspector(editor:editor,tab:$inspectorTab,cropping:cropping) {
+                    CropControls(aspect:cropAspect,editing:cropping,ready:cropImage != nil,
+                                 canReset:cropping ? cropSelection != CropControls.full:editor.project?.crop != nil,
+                                 choose:chooseCropAspect,reset:resetCrop,cancel:endCrop,apply:applyCrop)
                 }.feedbackTarget("editor.inspector","Inspector").frame(width:282).disabled(locked)
             }
             Rule()
@@ -74,7 +78,10 @@ struct StudioView: View {
                 Button("Open Demo Project") { Task { await editor.loadDemo() } }
                 Divider()
                 Button("Appearance Lab…") { openWindow(id: "appearance-lab") }
-            } label: { Image(systemName: "ellipsis").frame(width: 40, height: 40).background(Ink.soft,in:RoundedRectangle(cornerRadius:8)) }.feedbackTarget("editor.actions","Project actions").menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Project actions").disabled(locked)
+            } label: { Image(systemName:"ellipsis").accessibilityLabel("Project actions") }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                .modifier(StudioIconSurface()).help("Project actions").accessibilityLabel("Project actions")
+                .feedbackTarget("editor.actions","Project actions").disabled(locked)
             if capture.recording {
                 Button { Task { await capture.stop() } } label: { Label("Stop recording", systemImage: "stop.circle.fill") }
                     .buttonStyle(StudioButtonStyle(primary: true)).disabled(capture.busy)
@@ -91,25 +98,26 @@ struct StudioView: View {
             if editor.project != nil {
                 GeometryReader { geometry in
                     let available = CGSize(width: max(1, geometry.size.width - theme.settings.spacing * 3), height: max(1, geometry.size.height - theme.settings.spacing * 3))
-                    let source = cropImage.map { CGSize(width:$0.width,height:$0.height) } ?? editor.videoSize
-                    let aspect = max(0.001,source.width/max(1,source.height))
-                    let width = min(available.width,available.height*aspect)
-                    let size = CGSize(width:width,height:width/aspect)
-                    Group {
+                    let sourceFit=fitVideo(editor.sourceVideoSize,in:available)
+                    let size=cropping ? sourceFit:fitVideo(editor.videoSize,in:available)
+                    ZStack {
                         if cropping {
                             if let cropImage {
-                                CropCanvas(image:cropImage,size:size,selection:$cropSelection)
+                                Image(decorative:cropImage,scale:1).resizable()
                             } else if cropFrameFailed {
                                 Text("Could not load the original frame.").font(Geist.font(13)).foregroundStyle(Ink.secondary)
                             } else { ProgressView("Loading original frame…") }
                         } else {
                             NativePlayer(player:editor.player)
-                                .frame(width:size.width,height:size.height)
                                 .clipShape(RoundedRectangle(cornerRadius:7))
                                 .overlay { RoundedRectangle(cornerRadius:7).strokeBorder(.black.opacity(0.1),lineWidth:1) }
                                 .shadow(color:.black.opacity(0.10),radius:22,y:10)
                         }
-                    }.position(x:geometry.size.width/2,y:geometry.size.height/2)
+                        CropCanvas(size:size,sourceFit:sourceFit,selection:cropping ? cropSelection:savedSelection,
+                                   editing:cropping,ready:cropImage != nil,ratio:cropRatio,begin:beginCrop,
+                                   change:setCropSelection).disabled(locked)
+                    }.frame(width:size.width,height:size.height)
+                        .position(x:geometry.size.width/2,y:geometry.size.height/2)
                 }
             } else { emptyState }
             if editor.busy {
@@ -149,8 +157,9 @@ struct StudioView: View {
             Text(editor.project == nil ? "Preview" : "\(Int(editor.videoSize.width)) × \(Int(editor.videoSize.height))")
                 .font(Geist.font(11, .medium)).foregroundStyle(Ink.secondary).frame(width: 120, alignment: .leading)
             Spacer()
-            IconButton(symbol: "backward.end", title: "Go to start") { editor.seek(editor.project?.trimStart ?? 0) }
+            IconButton(symbol:"gobackward.5",title:"Back 5 seconds") { editor.skip(by:-5) }
             IconButton(symbol: editor.isPlaying ? "pause.fill" : "play.fill", title: editor.isPlaying ? "Pause" : "Play") { editor.togglePlayback() }
+            IconButton(symbol:"goforward.5",title:"Forward 5 seconds") { editor.skip(by:5) }
             Text(clockText(editor.playhead)).font(Geist.font(12, .medium)).monospacedDigit().frame(width: 70)
             Text("/  \(clockText(editor.duration))").font(Geist.font(12)).monospacedDigit().foregroundStyle(Ink.secondary)
             Spacer()
@@ -158,15 +167,47 @@ struct StudioView: View {
                 .foregroundStyle(Ink.secondary).frame(width:120,alignment:.trailing)
         }.padding(.horizontal,24).frame(height:56).background(Color.white).disabled(editor.project == nil || locked || cropping)
     }
+    private func fitVideo(_ source:CGSize,in available:CGSize) -> CGSize {
+        let aspect=max(0.001,source.width/max(1,source.height))
+        let width=min(available.width,available.height*aspect)
+        return CGSize(width:width,height:width/aspect)
+    }
     private func beginCrop() {
-        guard !locked,let project=editor.project else { return }
+        guard !cropping,!locked,editor.project != nil else { return }
         editor.player.pause()
-        cropSelection=project.crop?.rect ?? CropControls.full
+        cropSelection=savedSelection
+        draftAspect=editor.project?.crop?.aspect ?? .freeform
         editor.cropping=true
+    }
+    private func setCropSelection(_ rect:CGRect) {
+        if cropping,VideoCrop(rect,aspect:draftAspect).fitsSource(editor.sourceVideoSize) {
+            cropSelection=rect;aspectBaseline=nil
+        }
+    }
+    private func chooseCropAspect(_ option:CropAspect) {
+        guard !locked,editor.project != nil else { return }
+        let ratio=option.normalizedRatio(source:editor.sourceVideoSize,current:savedSelection)
+        let baseline=aspectBaseline ?? (cropping ? cropSelection:savedSelection)
+        let proposed=CropAspect.fit(baseline,ratio:ratio)
+        let fitted=VideoCrop(proposed,aspect:option).fitsSource(editor.sourceVideoSize) ? proposed:CropAspect.fit(CropControls.full,ratio:ratio)
+        guard VideoCrop(fitted,aspect:option).fitsSource(editor.sourceVideoSize) else { return }
+        beginCrop()
+        aspectBaseline=baseline;draftAspect=option;cropSelection=fitted
+    }
+    private func resetCrop() {
+        if cropping { draftAspect = .freeform;cropSelection=CropControls.full;aspectBaseline=nil }
+        else { editor.applyCrop(nil) }
+    }
+    private func applyCrop() {
+        guard cropImage != nil else { return }
+        let crop=VideoCrop(cropSelection,aspect:draftAspect)
+        guard crop.fitsSource(editor.sourceVideoSize) else { return }
+        editor.applyCrop(cropSelection == CropControls.full && draftAspect == .freeform ? nil:crop)
+        endCrop()
     }
     private func endCrop() {
         if cropping { editor.cropping=false }
-        cropImage=nil;cropFrameFailed=false
+        cropImage=nil;cropFrameFailed=false;aspectBaseline=nil
     }
     private var statusBar: some View {
         HStack(spacing: 7) {

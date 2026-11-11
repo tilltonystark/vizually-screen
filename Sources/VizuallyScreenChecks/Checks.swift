@@ -17,6 +17,7 @@ struct VizuallyScreenChecks {
         try checks.testShortClipAndTrimIntervals()
         try checks.testAppearanceRoundtripAndContrast()
         checks.testCaptureArea()
+        try checks.testCropAspects()
         checks.testMotionAndNativePixels()
         try checks.testAutomaticFocusAndMotion()
         try checks.testCanvasBackgrounds()
@@ -26,6 +27,32 @@ struct VizuallyScreenChecks {
         try await checks.testDemoClip()
         try await checks.testActualVideoExport()
         print("PASS: continuous camera/cursor motion, native pixel sizing and padded-frame crop encode/decode, short-clip/trim bounds, model/theme roundtrips and contrast, demo decode, 60 fps trimmed and cropped export with audio, cancellation cleanup")
+    }
+    func testCropAspects() throws {
+        let source=CGSize(width:3022,height:1616)
+        let full=CGRect(x:0,y:0,width:1,height:1)
+        let current=CGRect(x:0.1,y:0.2,width:0.5,height:0.4)
+        XCTAssertEqual(CropAspect.current.normalizedRatio(source:source,current:current)!,1.25,accuracy:0.000001)
+        XCTAssertTrue(CropAspect.freeform.normalizedRatio(source:source,current:current) == nil)
+        for (aspect,w,h) in [(CropAspect.wide,16,9),(.square,1,1),(.portrait,4,5)] {
+            let ratio=aspect.normalizedRatio(source:source,current:current)
+            let fitted=CropAspect.fit(full,ratio:ratio)
+            let drag=CropAspect.drag(anchor:CGPoint(x:0.85,y:0.8),toward:CGPoint(x:-0.5,y:0.25),ratio:ratio,left:true,top:true)
+            for area in [fitted,drag] {
+                let crop=VideoCrop(area,aspect:aspect)
+                XCTAssertTrue(crop.fitsSource(source))
+                let rect=crop.pixelRect(in:source)
+                XCTAssertEqual(Int(rect.width)*h,Int(rect.height)*w)
+                XCTAssertTrue(CGRect(origin:.zero,size:source).contains(rect))
+                XCTAssertEqual(Int(rect.width)%2,0)
+                XCTAssertEqual(Int(rect.height)%2,0)
+                XCTAssertEqual(try JSONDecoder().decode(VideoCrop.self,from:JSONEncoder().encode(crop)),crop)
+            }
+            XCTAssertEqual(drag.maxX,0.85,accuracy:0.000001)
+            XCTAssertEqual(drag.maxY,0.8,accuracy:0.000001)
+        }
+        let legacy=try JSONDecoder().decode(VideoCrop.self,from:Data(#"{"x":0,"y":0,"width":1,"height":1}"#.utf8))
+        XCTAssertTrue(legacy.aspect == nil)
     }
     func testCaptureArea() {
         let size=CGSize(width:1512,height:982)

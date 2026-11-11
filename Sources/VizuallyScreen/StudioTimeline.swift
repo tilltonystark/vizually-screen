@@ -13,7 +13,7 @@ struct StudioTimeline: View {
                 Text("Timeline").font(Geist.font(12, .semibold))
                 Spacer()
                 Text(editor.project == nil ? "Source time" : "Drag video edges to trim").font(Geist.font(11)).foregroundStyle(Ink.secondary)
-                Button(action: editor.addZoom) { Label("Add zoom", systemImage: "plus.magnifyingglass") }.buttonStyle(StudioButtonStyle(quiet: true)).disabled(editor.project == nil).feedbackTarget("timeline.addZoom","Add zoom")
+                Button(action: editor.addZoom) { Label("Add zoom", systemImage: StudioSymbol.zoom) }.buttonStyle(StudioButtonStyle(quiet: true)).disabled(editor.project == nil).feedbackTarget("timeline.addZoom","Add zoom")
             }.padding(.horizontal, 20).frame(height: 45)
             GeometryReader { geometry in
                 let width = max(1, geometry.size.width - labelWidth - 32)
@@ -22,7 +22,7 @@ struct StudioTimeline: View {
                     VStack(alignment: .leading, spacing: 0) {
                         Color.clear.frame(height: 26)
                         Label("Video", systemImage: "film").frame(height: 52)
-                        Label("Zoom", systemImage: "viewfinder").frame(height: 42)
+                        Label("Zoom", systemImage: StudioSymbol.zoom).frame(height: 42)
                     }.font(Geist.font(11)).foregroundStyle(Ink.secondary).frame(width: labelWidth, alignment: .leading)
                     ZStack(alignment: .topLeading) {
                         VStack(spacing: 7) {
@@ -110,7 +110,7 @@ struct StudioTimeline: View {
                 ForEach(Array(p.zooms.enumerated()), id: \.element.id) { index, zoom in
                     let selected = zoom.id == editor.selectedZoomID
                     Button { editor.selectZoom(zoom.id) } label: {
-                        HStack(spacing: 5) { Image(systemName: zoom.automatic == true ? "sparkles":"plus.magnifyingglass"); Text("\(zoom.scale, specifier: "%.1f")×").monospacedDigit() }
+                        HStack(spacing: 5) { Image(systemName: zoom.automatic == true ? "sparkles":StudioSymbol.zoom); Text("\(zoom.scale, specifier: "%.1f")×").monospacedDigit() }
                             .font(Geist.font(10,.medium)).foregroundStyle(selected ? .white : theme.accent)
                             .frame(width: max(3,min(zoom.duration,duration-zoom.start)/duration*width), height: 31)
                             .background(selected ? theme.accent : theme.tint, in: RoundedRectangle(cornerRadius: 5)).clipped()

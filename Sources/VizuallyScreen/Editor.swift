@@ -25,6 +25,7 @@ final class Editor: ObservableObject {
     @Published var isPlaying = false
     @Published var thumbnails: [NSImage] = []
     @Published var videoSize: CGSize = .zero
+    private(set) var sourceVideoSize: CGSize = .zero
     @Published var sourceFrameRate: Float = 0
     let player = AVPlayer()
     private var asset: AVURLAsset?
@@ -73,6 +74,9 @@ final class Editor: ObservableObject {
             try project.validate(duration: duration)
             if project.padding>0,let background=project.canvasBackground,background.kind == .image,CanvasBackground.loadImage(background.value) == nil { throw MediaExporter.qualityError("The background image is missing. Restore it or open a project with an available background.") }
             let frameRate = try await video.load(.nominalFrameRate)
+            let naturalSize = try await video.load(.naturalSize)
+            let transform = try await video.load(.preferredTransform)
+            let uprightSize = naturalSize.applying(transform)
             let generator = AVAssetImageGenerator(asset: asset)
             generator.appliesPreferredTrackTransform = true
             generator.maximumSize = CGSize(width: 240, height: 144)
@@ -98,6 +102,7 @@ final class Editor: ObservableObject {
             self.asset = asset; self.duration = duration; self.project = project;recordingTitle=title
             activeProjectURL=sidecar;hasChanges=false;showsHome=false
             onLibraryChange?(url,sidecar)
+            self.sourceVideoSize = CGSize(width:abs(uprightSize.width),height:abs(uprightSize.height))
             self.videoSize = composition.renderSize
             self.sourceFrameRate = frameRate
             self.thumbnails = images
@@ -205,6 +210,13 @@ final class Editor: ObservableObject {
                 if let pending=self.pendingSeek { self.pendingSeek=nil;self.seek(pending) }
             }
         }
+    }
+    func skip(by seconds: Double) {
+        guard let project else { return }
+        let lastFrame=max(project.trimStart,project.trimEnd-1/Double(max(30,sourceFrameRate)))
+        let target=min(lastFrame,max(project.trimStart,playhead+seconds))
+        if target >= lastFrame { player.pause() }
+        seek(target)
     }
     func togglePlayback() {
         guard project != nil, !busy else { return }

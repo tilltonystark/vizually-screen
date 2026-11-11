@@ -13,7 +13,7 @@ Record a screen or a single app window using the macOS source picker. An already
 
 The old `.framecraft.json` project format remains readable. New projects use `.vizually.json`; originals are never overwritten by export.
 
-Drag either handle on the video track to trim its start or end. For a spatial crop, choose **Crop video** at the top of the right pane. Draw a selection or resize its corners directly on the canvas, then choose **Apply crop**. **Reset** restores the full frame when applied. Both edits are saved in the project and applied on export; the original recording stays intact.
+Drag either handle on the video track to trim its start or end. For a spatial crop, drag a corner directly on the video or choose an aspect ratio in the **Crop** section. Draw or resize the crop on the original frame, then choose **Apply crop**. Freeform, Current, 16:9, 1:1 and 4:5 are available. **Reset** restores the full frame. Both edits are saved in the project and applied on export; the original recording stays intact.
 
 ## Reusable feedback package
 
