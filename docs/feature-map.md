@@ -28,7 +28,8 @@ P0 means release-blocking core quality. P1 means a valuable next workflow after 
 | Automatic focus / zoom | Direct viewer attention | P0 | Built, editable suggestions; synthetic tests | A: automatic zoom | Dwell/move/click sequence compared; no distracting zoom pumping or incorrect target |
 | Manual zoom editing | Recover from bad suggestions | P0 | Built; edits preserve manual intent | L: editor | Add, move, edit, remove and scrub; preview/export agree |
 | Camera easing | Zooms feel intentional | P0 | Built; continuous ramps | L: motion controls | Inspect entry/exit, interrupted moves and frame-by-frame continuity |
-| Trim and playback | Remove dead time confidently | P0 | Built; trim/export checks | L: timeline | First/last frame, short clips and audio match selected range |
+| Trim and playback | Remove dead time confidently | P0 | Built; timeline trim handles plus inspector sliders | L: timeline | First/last frame, short clips and audio match selected range |
+| Post-recording crop | Remove unwanted edges without rerecording | P1 (user requested) | Freeform crop sheet; project, preview and export use the same crop | Unverified | Off-center crop preserves source pixel placement, dimensions, cursor/zoom alignment, and original file |
 | Export choices | Understand size versus fidelity | P0 | High quality / Most compatible / Maximum detail | Unverified | Decoded detail, actual size, compatibility and export speed measured per option |
 | Export cancellation / failure | No corrupt result or lost work | P0 | Cancellation cleanup test passes | Unverified | Disk full, cancel and encoder error recover without losing project |
 | Saved projects / reopen | Keep edits between sessions | P0 | Built; legacy format supported | L: library | Save/reopen preserves source, trims, focus, pointer and background |

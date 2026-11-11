@@ -34,27 +34,35 @@ package enum Renderer {
     ]
     package static func composition(asset: AVAsset, project: Project, state: RenderState? = nil) -> AVVideoComposition {
         let state=state ?? RenderState(project)
+        let crop = project.crop
         let composition = AVVideoComposition(asset: asset) { request in
             let (project,backgroundImage)=state.snapshot
-            let source = request.sourceImage
-            let rect = source.extent
-            let z = project.zoom(at: request.compositionTime.seconds)
-            let center = CGPoint(x: rect.minX + rect.width * z.x, y: rect.minY + rect.height * (1 - z.y))
-            // Clamp pan so a zoom never reveals pixels outside the source frame.
-            let tx = min(0, max(rect.width * (1 - z.scale), rect.width / 2 - center.x * z.scale))
-            let ty = min(0, max(rect.height * (1 - z.scale), rect.height / 2 - center.y * z.scale))
+            let extent = request.sourceImage.extent
+            let source = request.sourceImage.transformed(by: .init(translationX:-extent.minX,y:-extent.minY))
+            let full = source.extent
+            let area = crop?.pixelRect(in: full.size) ?? full
+            let rect = CGRect(origin:.zero,size:area.size)
+            let normalized = CGRect(x:area.minX/full.width,y:1-area.maxY/full.height,width:area.width/full.width,height:area.height/full.height)
+            let time = request.compositionTime.seconds
+            let z = project.zoom(at: time,in:normalized)
+            let tx = min(0, max(rect.width * (1 - z.scale), rect.width * (0.5 - z.x * z.scale)))
+            let ty = min(0, max(rect.height * (1 - z.scale), rect.height * (0.5 - (1-z.y) * z.scale)))
             let inset = min(rect.width, rect.height) * project.padding
             let scale = min((rect.width - 2 * inset) / rect.width, (rect.height - 2 * inset) / rect.height)
             let frame = CGRect(x: (rect.width - rect.width * scale) / 2, y: (rect.height - rect.height * scale) / 2, width: rect.width * scale, height: rect.height * scale)
             var content = source
-            if let samples = project.cursorSamples, let cursor = Motion.cursor(at: request.compositionTime.seconds, samples: samples) {
-                let cursorSize = max(18, rect.width / 75)
-                let arrow = cursorImage.transformed(by: CGAffineTransform(a:cursorSize/128,b:0,c:0,d:cursorSize/128,tx:cursor.x*rect.width,ty:(1-cursor.y)*rect.height-cursorSize))
+            if let samples = project.cursorSamples, let cursor = Motion.cursor(at:time,samples:samples),
+               crop == nil || normalized.contains(CGPoint(x:cursor.x,y:cursor.y)) {
+                let cursorSize = max(18, full.width / 75)
+                let arrow = cursorImage.transformed(by: CGAffineTransform(a:cursorSize/128,b:0,c:0,d:cursorSize/128,tx:cursor.x*full.width,ty:(1-cursor.y)*full.height-cursorSize))
                 content = arrow.composited(over:content)
+            }
+            if crop != nil {
+                content = content.cropped(to:area).transformed(by:.init(translationX:-area.minX,y:-area.minY))
             }
             // One spatial resampling stage for zoom + framing; no intermediate raster resize.
             let combined = z.scale * scale
-            let resampled = abs(combined-1)<0.000001 ? content : content.applyingFilter("CILanczosScaleTransform",parameters:[kCIInputScaleKey:combined,kCIInputAspectRatioKey:1])
+            let resampled = abs(combined-1)<0.000001 ? content : (crop == nil ? content : content.clampedToExtent()).applyingFilter("CILanczosScaleTransform",parameters:[kCIInputScaleKey:combined,kCIInputAspectRatioKey:1])
             let foreground = resampled.transformed(by:CGAffineTransform(translationX:tx*scale+frame.minX,y:ty*scale+frame.minY)).cropped(to:frame)
             if project.padding == 0 { request.finish(with:foreground.cropped(to:rect),context:nil);return }
             let bg:CIImage
@@ -70,6 +78,7 @@ package enum Renderer {
         }
         let mutable = composition.mutableCopy() as! AVMutableVideoComposition
         // Camera/cursor motion has a steady clock even when capture is variable frame rate.
+        if let crop { mutable.renderSize = crop.pixelRect(in:composition.renderSize).size }
         mutable.frameDuration = CMTime(value:1,timescale:60)
         mutable.sourceTrackIDForFrameTiming = kCMPersistentTrackID_Invalid
         return mutable

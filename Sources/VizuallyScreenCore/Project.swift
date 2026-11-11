@@ -22,6 +22,7 @@ package struct Project: Codable {
     package var sourcePath: String
     package var trimStart: Double = 0
     package var trimEnd: Double
+    package var crop: VideoCrop? = nil
     package var padding: Double = 0
     package var background: String = "Dune"
     package var canvasBackground: CanvasBackground? = nil
@@ -50,13 +51,13 @@ package struct Project: Codable {
         let start = max(trimStart, min(time, trimEnd - minimum))
         return Zoom(start: start, duration: min(3, trimEnd - start))
     }
-    package func zoom(at time: Double) -> (scale: Double, x: Double, y: Double) {
+    package func zoom(at time: Double, in frame: CGRect = CGRect(x:0,y:0,width:1,height:1)) -> (scale: Double, x: Double, y: Double) {
         // Continuous camera transforms. Later regions blend in/out instead of snapping.
         var scale=1.0,tx=0.0,ty=0.0
         for z in zooms.sorted(by: { $0.start == $1.start ? $0.id.uuidString < $1.id.uuidString : $0.start < $1.start }) {
             let weight=z.amount(at:time)
-            let targetX=min(0,max(1-z.scale,0.5-z.x*z.scale))
-            let targetY=min(0,max(1-z.scale,0.5-z.y*z.scale))
+            let targetX=min(0,max(1-z.scale,0.5-(z.x-frame.minX)/frame.width*z.scale))
+            let targetY=min(0,max(1-z.scale,0.5-(z.y-frame.minY)/frame.height*z.scale))
             scale=scale*(1-weight)+z.scale*weight
             tx=tx*(1-weight)+targetX*weight;ty=ty*(1-weight)+targetY*weight
         }
@@ -67,6 +68,7 @@ package struct Project: Codable {
         guard version == 1, duration.isFinite, trimStart.isFinite, trimEnd.isFinite,
               trimStart >= 0, trimEnd <= duration + 0.05, trimEnd > trimStart,
               padding.isFinite, (0...0.2).contains(padding),
+              crop?.isValid != false,
               canvasBackground?.isValid != false,
               (cursorSamples == nil || (cursorSamples!.count <= 2_000_000 && zip(cursorSamples!,cursorSamples!.dropFirst()).allSatisfy { $0.time <= $1.time } && cursorSamples!.allSatisfy { $0.time.isFinite && $0.time >= -0.1 && $0.x.isFinite && $0.y.isFinite && (0...1).contains($0.x) && (0...1).contains($0.y) })),
               Set(zooms.map(\.id)).count == zooms.count,

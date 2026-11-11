@@ -71,9 +71,6 @@ final class Editor: ObservableObject {
             }
             try project.validate(duration: duration)
             if project.padding>0,let background=project.canvasBackground,background.kind == .image,CanvasBackground.loadImage(background.value) == nil { throw MediaExporter.qualityError("The background image is missing. Restore it or open a project with an available background.") }
-            let naturalSize = try await video.load(.naturalSize)
-            let transform = try await video.load(.preferredTransform)
-            let transformedSize = naturalSize.applying(transform)
             let frameRate = try await video.load(.nominalFrameRate)
             let generator = AVAssetImageGenerator(asset: asset)
             generator.appliesPreferredTrackTransform = true
@@ -92,14 +89,15 @@ final class Editor: ObservableObject {
             guard generation == loadGeneration else { return }
             let item = AVPlayerItem(asset: asset)
             let state=RenderState(project)
-            item.videoComposition = Renderer.composition(asset:asset,project:project,state:state)
+            let composition = Renderer.composition(asset:asset,project:project,state:state)
+            item.videoComposition = composition
             renderState=state
             player.pause()
             // Commit only after validation and staging; failed loads preserve the current edit.
             self.asset = asset; self.duration = duration; self.project = project;recordingTitle=title
             activeProjectURL=sidecar;hasChanges=false;showsHome=false
             onLibraryChange?(url,sidecar)
-            self.videoSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
+            self.videoSize = composition.renderSize
             self.sourceFrameRate = frameRate
             self.thumbnails = images
             self.selectedZoomID = project.zooms.first?.id
@@ -239,13 +237,41 @@ final class Editor: ObservableObject {
         guard let selectedZoomID else { return }
         update { $0.zooms.removeAll { $0.id == selectedZoomID } }
     }
-    func setTrimStart(_ value: Double) {
-        update { $0.setTrimStart(value, duration: duration) }
-        if let p = project, playhead < p.trimStart || playhead > p.trimEnd { seek(p.trimStart) }
+    func setTrimStart(_ value: Double) { trim(to:value,start:true) }
+    func setTrimEnd(_ value: Double) { trim(to:value,start:false) }
+    func trim(to value: Double, start: Bool, preview: Bool = false) {
+        guard !busy,var p=project,value.isFinite else { return }
+        if start { p.setTrimStart(value,duration:duration) }
+        else { p.setTrimEnd(value,duration:duration) }
+        guard p.trimStart != project?.trimStart || p.trimEnd != project?.trimEnd else { return }
+        project=p;hasChanges=true
+        if preview {
+            player.pause()
+            let lastFrame = max(p.trimStart,p.trimEnd - 1/Double(max(30,sourceFrameRate)))
+            seek(start ? p.trimStart:lastFrame)
+        } else if playhead < p.trimStart || playhead >= p.trimEnd { seek(p.trimStart) }
     }
-    func setTrimEnd(_ value: Double) {
-        update { $0.setTrimEnd(value, duration: duration) }
-        if let p = project, playhead > p.trimEnd || playhead < p.trimStart { seek(p.trimStart) }
+    func cropFrame() async throws -> CGImage {
+        guard let asset else { throw CocoaError(.fileReadUnknown) }
+        let generator = AVAssetImageGenerator(asset:asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width:1440,height:1000)
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
+        let time = min(playhead,max(0,duration - 1/Double(max(30,sourceFrameRate))))
+        return try await generator.image(at:CMTime(seconds:time,preferredTimescale:60_000)).image
+    }
+    func applyCrop(_ crop: VideoCrop?) {
+        guard !busy,let asset,let item=player.currentItem,var p=project,
+              crop?.isValid != false,p.crop != crop else { return }
+        player.pause()
+        p.crop=crop
+        let state=RenderState(p)
+        let composition=Renderer.composition(asset:asset,project:p,state:state)
+        previewRefresh?.cancel();previewRefresh=nil
+        renderState=state;project=p;hasChanges=true
+        item.videoComposition=composition;videoSize=composition.renderSize
+        seek(playhead)
     }
     func cancelExport() { exportControl?.cancel();message="Cancelling export…" }
     @discardableResult func persistWorkingCopy() -> Bool {

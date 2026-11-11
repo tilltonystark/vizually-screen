@@ -11,6 +11,7 @@ struct StudioView: View {
     @Environment(\.openWindow) private var openWindow
     @Binding var showRecording:Bool
     @State private var showExport = false
+    @State private var showCrop = false
     @State private var inspectorTab = "Canvas"
     @State private var dropTargeted = false
     private var locked: Bool { editor.busy || capture.recording || capture.busy }
@@ -36,6 +37,7 @@ struct StudioView: View {
         .background(WindowChrome())
         .tint(theme.accent)
         .sheet(isPresented: $showExport) { ExportSheet(editor:editor).feedbackSurface(store:feedback,editor:editor,route:"export").environmentObject(theme).font(Geist.font()).preferredColorScheme(.light) }
+        .sheet(isPresented:$showCrop) { CropSheet(editor:editor).environmentObject(theme) }
         .onChange(of: editor.selectedZoomID) { _, value in if value != nil { inspectorTab = "Zoom" } }
     }
     private var toolbar: some View {
@@ -73,7 +75,7 @@ struct StudioView: View {
                     let aspect = editor.videoSize.width / max(1, editor.videoSize.height)
                     let width = min(available.width, available.height * aspect)
                     NativePlayer(player: editor.player)
-                        .frame(width: width, height: width / max(0.1, aspect))
+                        .frame(width: width, height: width / max(0.001, aspect))
                         .clipShape(RoundedRectangle(cornerRadius: 7))
                         .overlay { RoundedRectangle(cornerRadius: 7).strokeBorder(Color.black.opacity(0.1), lineWidth: 1) }
                         .shadow(color: .black.opacity(0.10), radius: 22, y: 10)
@@ -122,7 +124,11 @@ struct StudioView: View {
             Text(clockText(editor.playhead)).font(Geist.font(12, .medium)).monospacedDigit().frame(width: 70)
             Text("/  \(clockText(editor.duration))").font(Geist.font(12)).monospacedDigit().foregroundStyle(Ink.secondary)
             Spacer()
-            Text("Fit").font(Geist.font(11)).foregroundStyle(Ink.secondary).frame(width: 120, alignment: .trailing)
+            Button {
+                editor.player.pause();showCrop=true
+            } label: { Label("Crop",systemImage:"crop") }
+                .buttonStyle(StudioButtonStyle(quiet:true))
+                .help("Crop video").feedbackTarget("editor.crop","Crop video")
         }.padding(.horizontal, 24).frame(height: 56).background(Color.white).disabled(editor.project == nil || locked)
     }
     private var statusBar: some View {

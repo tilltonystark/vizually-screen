@@ -6,12 +6,13 @@ struct StudioTimeline: View {
     @ObservedObject var editor: Editor
     @EnvironmentObject var theme: StudioTheme
     private let labelWidth: CGFloat = 76
+    @State private var trimOrigin: Double?
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 Text("Timeline").font(Geist.font(12, .semibold))
                 Spacer()
-                Text("Source time").font(Geist.font(11)).foregroundStyle(Ink.secondary)
+                Text(editor.project == nil ? "Source time" : "Drag video edges to trim").font(Geist.font(11)).foregroundStyle(Ink.secondary)
                 Button(action: editor.addZoom) { Label("Add zoom", systemImage: "plus.magnifyingglass") }.buttonStyle(StudioButtonStyle(quiet: true)).disabled(editor.project == nil).feedbackTarget("timeline.addZoom","Add zoom")
             }.padding(.horizontal, 20).frame(height: 45)
             GeometryReader { geometry in
@@ -67,9 +68,40 @@ struct StudioTimeline: View {
                 Rectangle().fill(Color.white.opacity(0.7)).frame(width: max(0,width-right)).offset(x: right)
                 RoundedRectangle(cornerRadius: 5).strokeBorder(theme.accent, lineWidth: 2).frame(width: max(1,right-left)).offset(x:left)
             } else { Text("Your video will appear here").font(Geist.font(11)).foregroundStyle(Ink.secondary).padding(.leading, 12) }
-        }.clipped().accessibilityElement(children: .ignore).contentShape(Rectangle()).gesture(DragGesture(minimumDistance: 0).onChanged { v in editor.seek(min(1,max(0,v.location.x/width))*duration) })
+        }.clipped().accessibilityElement(children: .ignore).contentShape(Rectangle())
+        .gesture(DragGesture(minimumDistance: 0).onChanged { v in editor.seek(min(1,max(0,v.location.x/width))*duration) })
         .feedbackTarget("timeline.video","Video timeline").accessibilityLabel("Video timeline").accessibilityValue(clockText(editor.playhead))
         .accessibilityAdjustableAction { direction in editor.seek(editor.playhead + (direction == .increment ? 0.1 : -0.1)) }
+        .overlay(alignment:.topLeading) {
+            if let p=editor.project {
+                let a=min(max(12,p.trimStart/duration*width),max(12,width-12))
+                let b=min(max(12,p.trimEnd/duration*width),max(12,width-12))
+                let overlap=b-a < 24
+                trimHandle(start:true,time:p.trimStart,width:width,duration:duration,height:overlap ? 26:52)
+                    .position(x:a,y:overlap ? 13:26)
+                trimHandle(start:false,time:p.trimEnd,width:width,duration:duration,height:overlap ? 26:52)
+                    .position(x:b,y:overlap ? 39:26)
+            }
+        }.coordinateSpace(name:"filmstrip")
+    }
+    private func trimHandle(start:Bool,time:Double,width:CGFloat,duration:Double,height:CGFloat) -> some View {
+        let label = start ? "Trim start":"Trim end"
+        return Capsule().fill(theme.accent).frame(width:12,height:min(32,height-4))
+            .overlay { Capsule().fill(.white).frame(width:2,height:10) }
+            .frame(width:24,height:height).contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance:1,coordinateSpace:.named("filmstrip")).onChanged { value in
+                if trimOrigin == nil { trimOrigin=time }
+                editor.trim(to:(trimOrigin ?? time)+value.translation.width/width*duration,start:start,preview:true)
+            }.onEnded { _ in trimOrigin=nil })
+            .focusable()
+            .onKeyPress(.leftArrow) { editor.trim(to:time-0.1,start:start,preview:true);return .handled }
+            .onKeyPress(.rightArrow) { editor.trim(to:time+0.1,start:start,preview:true);return .handled }
+            .help(label).accessibilityLabel(label).accessibilityValue(clockText(time))
+            .accessibilityAdjustableAction { direction in
+                if direction == .increment { editor.trim(to:time+0.1,start:start,preview:true) }
+                if direction == .decrement { editor.trim(to:time-0.1,start:start,preview:true) }
+            }
+            .feedbackTarget(start ? "timeline.trim.start":"timeline.trim.end",label)
     }
     private func zoomTrack(width: CGFloat, duration: Double) -> some View {
         ZStack(alignment: .leading) {

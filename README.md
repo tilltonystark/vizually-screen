@@ -13,6 +13,8 @@ Record a screen or a single app window using the macOS source picker. An already
 
 The old `.framecraft.json` project format remains readable. New projects use `.vizually.json`; originals are never overwritten by export.
 
+Drag either handle on the video track to trim its start or end. For a spatial crop, use **Crop** below the preview, drag over what you want to keep, then choose **Apply crop**. **Reset** restores the full frame when applied. Both edits are saved in the project and applied on export; the original recording stays intact.
+
 ## Reusable feedback package
 
 The **VizuallyFeedback** Swift Package library is used directly by this app and can be added to other SwiftUI/macOS projects. [Installation, API and update workflow](docs/feedback/README.md) · [independent sample](Examples/FeedbackDemo). Future feedback fixes live in the library so the app and package share one implementation.

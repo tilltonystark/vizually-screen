@@ -38,7 +38,7 @@ package enum MediaExporter {
         let audioTracks = try await asset.loadTracks(withMediaType: .audio)
         if !audioTracks.isEmpty {
             let output = AVAssetReaderAudioMixOutput(audioTracks: audioTracks, audioSettings: [AVFormatIDKey: kAudioFormatLinearPCM, AVLinearPCMBitDepthKey: 16, AVLinearPCMIsFloatKey: false, AVLinearPCMIsNonInterleaved: false])
-            let audioSettings: [String:Any] = quality == .master ? [AVFormatIDKey:kAudioFormatLinearPCM,AVSampleRateKey:48_000,AVNumberOfChannelsKey:2,AVLinearPCMBitDepthKey:16,AVLinearPCMIsFloatKey:false,AVLinearPCMIsBigEndianKey:false] : [AVFormatIDKey:kAudioFormatMPEG4AAC,AVSampleRateKey:48_000,AVNumberOfChannelsKey:2,AVEncoderBitRateKey:256_000]
+            let audioSettings: [String:Any] = quality == .master ? [AVFormatIDKey:kAudioFormatLinearPCM,AVSampleRateKey:48_000,AVNumberOfChannelsKey:2,AVLinearPCMBitDepthKey:16,AVLinearPCMIsFloatKey:false,AVLinearPCMIsBigEndianKey:false,AVLinearPCMIsNonInterleaved:false] : [AVFormatIDKey:kAudioFormatMPEG4AAC,AVSampleRateKey:48_000,AVNumberOfChannelsKey:2,AVEncoderBitRateKey:256_000]
             let audio = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
             guard reader.canAdd(output),writer.canAdd(audio) else { throw CocoaError(.fileWriteUnknown) }
             reader.add(output);writer.add(audio);pairs.append((output,audio,false))

@@ -25,7 +25,7 @@ struct VizuallyScreenChecks {
         try await checks.testCaptureContentBounds()
         try await checks.testDemoClip()
         try await checks.testActualVideoExport()
-        print("PASS: continuous camera/cursor motion, native pixel sizing and padded-frame crop encode/decode, short-clip/trim bounds, model/theme roundtrips and contrast, demo decode, 60 fps trimmed export with audio, cancellation cleanup")
+        print("PASS: continuous camera/cursor motion, native pixel sizing and padded-frame crop encode/decode, short-clip/trim bounds, model/theme roundtrips and contrast, demo decode, 60 fps trimmed and cropped export with audio, cancellation cleanup")
     }
     func testCaptureArea() {
         let size=CGSize(width:1512,height:982)
@@ -424,6 +424,72 @@ struct VizuallyScreenChecks {
             CIContext().render(CIImage(cgImage:image),toBitmap:storage.baseAddress!,rowBytes:1280,bounds:CGRect(x:0,y:0,width:320,height:180),format:.RGBA8,colorSpace:CGColorSpace(name:CGColorSpace.sRGB))
         }
         for (x,y) in [(3,3),(316,3),(3,176),(316,176)] { let i=(y*320+x)*4;XCTAssertTrue(rgba[i+1]>rgba[i]+40 && rgba[i+1]>rgba[i+2]+30) }
+        // An off-center crop must retain the intended source pixels in both preview and export.
+        let original=try Data(contentsOf:inputURL)
+        let crop=VideoCrop(CGRect(x:0.25,y:0.10,width:0.5,height:0.6))
+        var croppedProject=Project(sourcePath:inputURL.path,trimStart:0.25,trimEnd:1.75)
+        croppedProject.crop=crop
+        let reopened=try JSONDecoder().decode(Project.self,from:JSONEncoder().encode(croppedProject))
+        XCTAssertEqual(reopened.crop,crop)
+        var invalid=croppedProject
+        invalid.crop=VideoCrop(CGRect(x:0.9,y:0,width:0.5,height:0.5))
+        XCTAssertThrowsError(try invalid.validate(duration:2))
+        let cropURL=dir.appendingPathComponent("crop.mov")
+        try await MediaExporter.export(asset:asset,project:reopened,quality:.master,to:cropURL)
+        let croppedAsset=AVURLAsset(url:cropURL)
+        let composition=Renderer.composition(asset:asset,project:reopened)
+        XCTAssertEqual(composition.renderSize,CGSize(width:160,height:108))
+        let preview=AVAssetImageGenerator(asset:asset)
+        preview.videoComposition=composition
+        let context=CIContext()
+        func pixel(_ image:CGImage,x:Int,y:Int) -> [UInt8] {
+            var bytes=[UInt8](repeating:0,count:4)
+            bytes.withUnsafeMutableBytes {
+                context.render(CIImage(cgImage:image),toBitmap:$0.baseAddress!,rowBytes:4,
+                    bounds:CGRect(x:x,y:y,width:1,height:1),format:.RGBA8,colorSpace:CGColorSpace(name:CGColorSpace.sRGB))
+            }
+            return bytes
+        }
+        func frameAt(_ reader:AVAssetImageGenerator,_ time:Double) async throws -> CGImage {
+            reader.requestedTimeToleranceBefore = .zero
+            reader.requestedTimeToleranceAfter = .zero
+            return try await reader.image(at:CMTime(seconds:time,preferredTimescale:600)).image
+        }
+        let originalFrame=try await frameAt(AVAssetImageGenerator(asset:asset),0.75)
+        for (reader,time) in [(preview,0.75),(AVAssetImageGenerator(asset:croppedAsset),0.5)] {
+            let frame=try await frameAt(reader,time)
+            XCTAssertEqual(frame.width,160);XCTAssertEqual(frame.height,108)
+            for (x,y) in [(5,5),(120,95)] {
+                let color=pixel(frame,x:x,y:y)
+                let expected=pixel(originalFrame,x:x+80,y:y+54)
+                for channel in 0..<3 { XCTAssertEqual(Double(color[channel]),Double(expected[channel]),accuracy:12) }
+            }
+        }
+        let cropDuration=try await croppedAsset.load(.duration).seconds
+        XCTAssertEqual(cropDuration,1.5,accuracy:0.04)
+        XCTAssertEqual(try await croppedAsset.loadTracks(withMediaType:.audio).count,1)
+        XCTAssertEqual(try Data(contentsOf:inputURL),original)
+        var zoomedCrop=croppedProject
+        zoomedCrop.zooms=[Zoom(start:0,duration:2,scale:2,x:0.55,y:0.40)]
+        let zoom=zoomedCrop.zoom(at:1,in:crop.rect)
+        XCTAssertEqual(zoom.x,0.6,accuracy:0.0001)
+        XCTAssertEqual(zoom.y,0.5,accuracy:0.0001)
+        func zoomedFrame(_ project:Project) async throws -> CGImage {
+            let generator=AVAssetImageGenerator(asset:asset)
+            generator.videoComposition=Renderer.composition(asset:asset,project:project)
+            return try await frameAt(generator,1)
+        }
+        let noPointer=try await zoomedFrame(zoomedCrop)
+        // A hotspot just outside the crop cannot leave a stray pointer in the output.
+        zoomedCrop.cursorSamples=[CursorSample(time:1,x:0.24,y:0.4)]
+        let excluded=try await zoomedFrame(zoomedCrop)
+        XCTAssertEqual(excluded.dataProvider!.data! as Data,noPointer.dataProvider!.data! as Data)
+        zoomedCrop.cursorSamples=[CursorSample(time:1,x:0.55,y:0.4)]
+        let included=try await zoomedFrame(zoomedCrop)
+        XCTAssertTrue((83..<100).contains { x in
+            (36..<51).contains { y in pixel(included,x:x,y:y) != pixel(noPointer,x:x,y:y) }
+        })
+
         // Verify export produced more than a container header.
         XCTAssertGreaterThan(try Data(contentsOf: outputURL).count, 1000)
     }
