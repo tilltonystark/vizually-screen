@@ -72,13 +72,13 @@ struct FeedbackInput: NSViewRepresentable {
   var fontName: String?
   var submit: () -> Void
   func makeNSView(context: Context) -> NSScrollView {
-    let scroll = NSScrollView()
+    let scroll = WrappingScrollView()
     scroll.borderType = .noBorder
     scroll.focusRingType = .none
     scroll.drawsBackground = false
     scroll.hasVerticalScroller = true
-    let input = InputView(frame: NSRect(x: 0, y: 0, width: 288, height: 88))
-    input.minSize = .zero
+    let input = InputView(frame: NSRect(origin: .zero, size: scroll.contentSize))
+    input.minSize = NSSize(width: 0, height: scroll.contentSize.height)
     input.maxSize = NSSize(
       width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
     input.isRichText = false
@@ -89,19 +89,36 @@ struct FeedbackInput: NSViewRepresentable {
     input.isVerticallyResizable = true
     input.isHorizontallyResizable = false
     input.autoresizingMask = [.width]
+    input.textContainer?.containerSize = NSSize(
+      width: scroll.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
     input.textContainer?.widthTracksTextView = true
     input.delegate = context.coordinator
     input.onSubmit = submit
     input.setAccessibilityLabel("Feedback comment")
     scroll.documentView = input
+    scroll.resizeDocumentToContentWidth()
     DispatchQueue.main.async { input.window?.makeFirstResponder(input) }
     return scroll
   }
   func updateNSView(_ scroll: NSScrollView, context: Context) {
     context.coordinator.parent = self
     if let input = scroll.documentView as? InputView {
+      (scroll as? WrappingScrollView)?.resizeDocumentToContentWidth()
       if input.string != text { input.string = text }
       input.onSubmit = submit
+    }
+  }
+  final class WrappingScrollView: NSScrollView {
+    override func layout() {
+      super.layout()
+      resizeDocumentToContentWidth()
+    }
+    func resizeDocumentToContentWidth() {
+      guard let input = documentView as? InputView else { return }
+      let width = max(1, contentSize.width)
+      if input.frame.width != width { input.setFrameSize(NSSize(width: width, height: input.frame.height)) }
+      input.textContainer?.containerSize = NSSize(
+        width: width, height: CGFloat.greatestFiniteMagnitude)
     }
   }
   func makeCoordinator() -> Coordinator { Coordinator(self) }
