@@ -31,13 +31,15 @@ public struct FeedbackAppearance {
   }
 }
 struct FeedbackSendStyle: ButtonStyle {
+  @Environment(\.isEnabled) private var isEnabled
   var appearance: FeedbackAppearance
   func makeBody(configuration: Configuration) -> some View {
-    configuration.label.font(appearance.font(13, medium: true)).padding(.horizontal, 14).frame(
-      minHeight: 36
-    )
-    .foregroundStyle(.white).background(
-      appearance.accent.opacity(configuration.isPressed ? 0.8 : 1),
-      in: RoundedRectangle(cornerRadius: 8))
+    configuration.label.font(.system(size: 14, weight: .semibold))
+      .frame(width: 32, height: 32)
+      .foregroundStyle(isEnabled ? Color.white : appearance.secondaryText)
+      .background(
+        isEnabled ? appearance.accent.opacity(configuration.isPressed ? 0.8 : 1)
+          : appearance.secondaryText.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+      .frame(width: 44, height: 44).contentShape(Rectangle())
   }
 }

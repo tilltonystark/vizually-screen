@@ -187,24 +187,43 @@ struct FeedbackOverlay: View {
           HStack {
             Text(target.label).font(appearance.font(13, medium: true)).lineLimit(1)
             Spacer()
-            Button(action: clearSelection) { Image(systemName: "xmark") }.buttonStyle(.plain)
-              .accessibilityLabel("Cancel comment")
+            Button(action: clearSelection) {
+              Image(systemName: "xmark").font(.system(size: 11, weight: .medium))
+                .frame(width: 28, height: 28).contentShape(Rectangle())
+            }.buttonStyle(.plain).foregroundStyle(appearance.secondaryText)
+              .help("Cancel comment").accessibilityLabel("Cancel comment")
           }
-          FeedbackInput(text: $comment, fontName: appearance.regularFontName) { submit(target) }
-            .frame(height: 88).padding(6).background(
-              appearance.field, in: RoundedRectangle(cornerRadius: 6))
-          HStack {
-            Text("Enter to send · Shift↵ new line").font(appearance.font(10)).foregroundStyle(
-              appearance.secondaryText)
-            Spacer()
-            Button("Send") { submit(target) }.buttonStyle(FeedbackSendStyle(appearance: appearance))
+          VStack(alignment: .trailing, spacing: 0) {
+            FeedbackInput(text: $comment, fontName: appearance.regularFontName) { submit(target) }
+              .frame(height: 72)
+              .overlay(alignment: .topLeading) {
+                if comment.isEmpty {
+                  Text("Write a comment…").font(appearance.font(13))
+                    .foregroundStyle(appearance.secondaryText)
+                    .padding(.leading, 10).padding(.top, 5)
+                    .allowsHitTesting(false).accessibilityHidden(true)
+                }
+              }
+              .padding([.top, .horizontal], 3)
+            Button {
+              submit(target)
+            } label: {
+              Image(systemName: "arrow.up")
+            }.buttonStyle(FeedbackSendStyle(appearance: appearance))
               .disabled(comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+              .help("Send comment").accessibilityLabel("Send comment")
+          }
+          .background(appearance.field, in: RoundedRectangle(cornerRadius: 9))
+          .overlay {
+            RoundedRectangle(cornerRadius: 9).strokeBorder(appearance.secondaryText.opacity(0.3))
+              .allowsHitTesting(false)
           }
           if let error = store.error { Text(error).font(appearance.font(12)).foregroundStyle(.red) }
         }.padding(16).frame(width: 320).background(
           appearance.surface, in: RoundedRectangle(cornerRadius: 12)
         ).overlay {
           RoundedRectangle(cornerRadius: 12).strokeBorder(.black.opacity(0.12), lineWidth: 0.5)
+            .allowsHitTesting(false)
         }.shadow(color: .black.opacity(0.12), radius: 18, y: 6)
           .background(
             GeometryReader { proxy in

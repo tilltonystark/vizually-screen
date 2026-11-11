@@ -1,5 +1,9 @@
 # VizuallyFeedback changes
 
+## Unreleased
+
+- Give the comment field a light border and put the labeled send arrow inside it. Return still sends and Shift+Return still adds a line.
+
 ## 0.7.0 — 2026-11-04
 
 First extracted Swift Package library, used directly by Vizually Screen and an independent sample.

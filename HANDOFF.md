@@ -183,3 +183,7 @@ Read and acknowledged the four new editor annotations. Reviewed the crop design 
 Freeform is unconstrained, Current locks the applied frame’s ratio, and 16:9, 1:1 and 4:5 lock to those proportions. Fixed presets round to exact even-pixel encoder multiples. Saved crop data remains compatible with prior projects. The project menu uses the common icon-button surface outside the native menu label. Zoom’s timeline and inspector labels share a symbol. Back/forward five-second controls flank Play/Pause and stay inside the trimmed range.
 
 Release build and media checks pass, including preset pixel dimensions, anchor geometry, saved crop decoding, and the existing crop export checks. The live app had an unsent feedback draft, so did not restart it or change the draft. Live drag and playback checks on the final build remain unverified. The older feedback Escape report remains open; no change to the feedback library.
+
+## Feedback composer polish (November 11)
+
+The requested composer changes live in VizuallyFeedback: one light border around the text and send arrow, no inset AppKit border or focus shadow, and no visible keyboard hint. Return sends, Shift+Return inserts a newline, and the labeled send arrow stays disabled for blank comments. The independent native sample verified both submit paths and persisted the multiline text locally. The user clarified this pass was for the feedback modal; crop behavior did not change. Leave the annotation open for acceptance.

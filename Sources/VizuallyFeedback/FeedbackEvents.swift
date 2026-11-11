@@ -73,6 +73,8 @@ struct FeedbackInput: NSViewRepresentable {
   var submit: () -> Void
   func makeNSView(context: Context) -> NSScrollView {
     let scroll = NSScrollView()
+    scroll.borderType = .noBorder
+    scroll.focusRingType = .none
     scroll.drawsBackground = false
     scroll.hasVerticalScroller = true
     let input = InputView(frame: NSRect(x: 0, y: 0, width: 288, height: 88))
@@ -80,6 +82,7 @@ struct FeedbackInput: NSViewRepresentable {
     input.maxSize = NSSize(
       width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
     input.isRichText = false
+    input.focusRingType = .none
     input.drawsBackground = false
     input.font = fontName.flatMap { NSFont(name: $0, size: 13) } ?? NSFont.systemFont(ofSize: 13)
     input.textContainerInset = NSSize(width: 5, height: 5)
