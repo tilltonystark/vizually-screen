@@ -63,6 +63,7 @@ public struct FeedbackRecord: Codable, Identifiable, Equatable, Sendable {
   public var resolved: Bool = false
   public var agentID: String? = nil
   public var agentStatus: String? = nil
+  public var agentQuestion: String? = nil
   public init(
     targetID: String, targetLabel: String, sourceFile: String, sourceLine: Int,
     context: FeedbackContext, bounds: [Double], point: [Double], viewport: [Double], build: String,
@@ -89,14 +90,42 @@ public struct FeedbackRecord: Codable, Identifiable, Equatable, Sendable {
       && (playbackTime == nil || playbackTime!.isFinite)
   }
 }
+
+package enum FeedbackStatus: String {
+  case saved = "Saved locally"
+  case unsent = "Waiting to send"
+  case queued = "Queued"
+  case inProgress = "In progress"
+  case waitingForInput = "Waiting for input"
+  case resolved = "Resolved"
+  case dismissed = "Dismissed"
+
+  package init(_ record: FeedbackRecord, connectionEnabled: Bool) {
+    switch record.agentStatus {
+    case "dismissed": self = .dismissed
+    case "resolved": self = .resolved
+    default:
+      if record.resolved { self = .resolved }
+      else if record.agentStatus == "waiting_for_input" || record.agentQuestion != nil {
+        self = .waitingForInput
+      }
+      else if record.agentStatus == "acknowledged" { self = .inProgress }
+      else if record.agentID != nil { self = .queued }
+      else { self = connectionEnabled ? .unsent : .saved }
+    }
+  }
+}
+
 public struct FeedbackReceipt: Sendable {
   public var recordID: UUID
   public var agentID: String
   public var status: String
-  public init(recordID: UUID, agentID: String, status: String) {
+  public var agentQuestion: String?
+  public init(recordID: UUID, agentID: String, status: String, agentQuestion: String? = nil) {
     self.recordID = recordID
     self.agentID = agentID
     self.status = status
+    self.agentQuestion = agentQuestion
   }
 }
 public struct FeedbackSyncResult: Sendable {

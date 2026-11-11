@@ -75,15 +75,17 @@ Use one shared store per project. Give different projects unique IDs and storage
 
 ## Interaction
 
-Click the bottom-right button or press **C** outside editable text to toggle. Hover outlines the smallest registered target. Click opens a draft beside the pin. **Enter** sends; **Shift+Enter** inserts a line. Clicking outside a draft dismisses it; Escape clears selection and exits feedback mode. Leaving the app or changing route clears the current selection. Normal input remains intact outside feedback mode.
+Click the bottom-right comment bubble to open the feedback log. It lists submitted comments newest first with the target, date, status and any question awaiting an answer. Choose **New comment** from the log, or press **C** outside editable text to toggle selection directly. Hover outlines the smallest registered target. Click opens a draft beside the pin. **Enter** sends; **Shift+Enter** inserts a line. Clicking outside a draft dismisses it; Escape clears selection and exits feedback mode. Leaving the app or changing route clears the current selection. Normal input remains intact outside feedback mode.
 
-The button tracks the latest comment: amber queued/offline, blue acknowledged by the agent, green resolved. Local-only mode shows a neutral saved state. Acknowledgement is a workflow state, not a process heartbeat. No history panel is shown.
+The button tracks the latest comment: amber queued or waiting, blue in progress, green resolved. Local-only and dismissed feedback use a neutral dot. In progress means the agent acknowledged the feedback; it does not indicate a running process.
 
 ## Agent connection
 
 Default endpoint: `http://127.0.0.1:4747`, using the [Agentation REST API](https://www.agentation.com/api). The server/MCP connection must already be available to the agent. The overlay does not install a server, launch an agent, or wake an idle chat. An active agent reads/watches the app-specific session and acknowledges/replies/resolves through Agentation. `FeedbackStore.sessionID` exposes that session; never enumerate unrelated projects' sessions.
 
 Pass `endpoint: nil` for local-only use. Comments survive disconnects and delivery retries. Receipt reconciliation uses a local UUID to prevent duplicates after uncertain delivery. A failed session GET does not create a new session; only a confirmed 404 does. Sync merges receipts without replacing comments added in flight.
+
+For agents: acknowledge a comment when work starts. Use an Agentation thread reply beginning with `Waiting for input:` followed by the actual question when an answer is needed. The app shows the question in the log. The user can answer in the agent chat. After receiving an answer, reply with `In progress:` to clear the question and acknowledge the annotation if it was still queued. Resolution or dismissal takes precedence over these replies. Resolve feedback only once the user accepts the fix.
 
 The payload contains comment text, target ID/label, source file ID/line, bounds/pin, build, route and explicit host context. It does **not** capture screenshots, video, environment variables or a DOM dump. All configured endpoints receive that payload; keep the default local endpoint unless you intentionally configure another destination.
 

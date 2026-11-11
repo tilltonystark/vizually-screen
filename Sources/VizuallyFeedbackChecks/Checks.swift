@@ -39,8 +39,13 @@ actor FakeHTTP: FeedbackHTTPClient {
     }
     fatalError("Unexpected fixture request: \(route)")
   }
-  func markResolved() {
-    for index in annotations.indices { annotations[index]["status"] = "resolved" }
+  func mark(_ status: String) {
+    for index in annotations.indices { annotations[index]["status"] = status }
+  }
+  func reply(_ text: String, role: String = "agent") {
+    var thread = annotations[0]["thread"] as? [[String: String]] ?? []
+    thread.append(["role": role, "content": text])
+    annotations[0]["thread"] = thread
   }
   func snapshot() -> ([String], Int) { (routes, annotations.count) }
   private func response(_ request: URLRequest, _ status: Int, _ body: [String: Any]) -> (
@@ -99,6 +104,8 @@ actor DelayedTransport: FeedbackTransport {
     let reopened = FeedbackStore(configuration: config("local"))
     check(reopened.items == [original], "Reopen lost a comment")
     check(!reopened.connectionEnabled, "Offline configuration enabled transport")
+    check(FeedbackStatus(reopened.items[0], connectionEnabled: false) == .saved,
+      "Local-only comment should be shown as saved")
     var alien = config("local")
     alien.projectID = "another-project"
     let isolated = FeedbackStore(configuration: alien)
@@ -160,13 +167,35 @@ actor DelayedTransport: FeedbackTransport {
         && sent.0.filter { $0 == "POST /sessions/fixture-session/annotations" }.count == 1,
       "Retry duplicated an accepted annotation")
     check(online.items[0].agentID == "fixture-0", "Retry did not reconcile receipt")
-    await client.markResolved()
+    func status(_ record: FeedbackRecord) -> FeedbackStatus {
+      FeedbackStatus(record, connectionEnabled: true)
+    }
+    check(status(online.items[0]) == .queued, "Delivered comment skipped the queue")
+    await client.mark("acknowledged")
+    await client.reply("Waiting for input: This is not an agent request.", role: "human")
     await online.sendPending()
-    check(online.items[0].resolved, "Remote completion was not reflected")
+    check(status(online.items[0]) == .inProgress, "Human text changed workflow status")
+    await client.reply("Waiting for input: Which control is affected?")
+    await online.sendPending()
+    let waiting = FeedbackStore(configuration: onlineConfig, transport: transport).items[0]
+    check(status(waiting) == .waitingForInput && waiting.agentQuestion == "Which control is affected?",
+      "Agent question and waiting status did not survive reopening")
+    await client.reply("In progress: Reproduced the issue.")
+    await online.sendPending()
+    check(status(online.items[0]) == .inProgress && online.items[0].agentQuestion == nil,
+      "Agent progress did not clear the question")
+    await client.reply("Waiting for input: Does this fix it?")
+    await client.mark("resolved")
+    await online.sendPending()
+    check(online.items[0].resolved && status(online.items[0]) == .resolved,
+      "Remote completion did not take precedence over a prior question")
     let restored = FeedbackStore(configuration: onlineConfig, transport: transport)
     check(
       restored.sessionID == "fixture-session" && restored.items[0].resolved,
       "Session/status did not persist")
+    await client.mark("dismissed")
+    await online.sendPending()
+    check(status(online.items[0]) == .dismissed, "Dismissed comment was shown as resolved")
 
     var formerlySent = sample()
     formerlySent.agentID = "old-annotation"

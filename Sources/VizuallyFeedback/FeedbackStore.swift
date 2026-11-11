@@ -47,6 +47,7 @@ import Foundation
           for index in items.indices where !items[index].resolved {
             items[index].agentID = nil
             items[index].agentStatus = nil
+            items[index].agentQuestion = nil
           }
         }
       } else if configuration.importLegacyRecords {
@@ -105,12 +106,14 @@ import Foundation
       for index in merged.indices where !merged[index].resolved {
         merged[index].agentID = nil
         merged[index].agentStatus = nil
+        merged[index].agentQuestion = nil
       }
     }
     for receipt in result.receipts {
       if let index = merged.firstIndex(where: { $0.id == receipt.recordID }) {
         merged[index].agentID = receipt.agentID
         merged[index].agentStatus = receipt.status
+        merged[index].agentQuestion = receipt.agentQuestion
         merged[index].resolved = ["resolved", "dismissed"].contains(receipt.status)
       }
     }

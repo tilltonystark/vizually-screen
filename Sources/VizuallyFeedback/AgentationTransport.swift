@@ -23,6 +23,19 @@ public struct AgentationTransport: FeedbackTransport {
     self.client = client
   }
   private struct HTTPFailure: Error { var status: Int }
+  private func question(in annotation: [String: Any]) -> String? {
+    let thread = annotation["thread"] as? [[String: Any]] ?? []
+    for message in thread.reversed() where message["role"] as? String == "agent" {
+      guard let content = message["content"] as? String else { continue }
+      if content.hasPrefix("In progress:") { return nil }
+      let prefix = "Waiting for input:"
+      if content.hasPrefix(prefix) {
+        let question = content.dropFirst(prefix.count).trimmingCharacters(in: .whitespacesAndNewlines)
+        return question.isEmpty ? nil : question
+      }
+    }
+    return nil
+  }
   private func request(_ path: String, body: [String: Any]? = nil) async throws -> [String: Any] {
     var request = URLRequest(url: endpoint.appendingPathComponent(path))
     request.timeoutInterval = 3
@@ -69,11 +82,12 @@ public struct AgentationTransport: FeedbackTransport {
         if let known = remote.first(where: {
           ($0["attributes"] as? [String: Any])?["localFeedbackID"] as? String
             == record.id.uuidString
+            || (!result.replacedSession && record.agentID != nil && $0["id"] as? String == record.agentID)
         }), let remoteID = known["id"] as? String {
           result.receipts.append(
             FeedbackReceipt(
               recordID: record.id, agentID: remoteID,
-              status: known["status"] as? String ?? "pending"))
+              status: known["status"] as? String ?? "pending", agentQuestion: question(in: known)))
           continue
         }
         guard !record.resolved, record.agentID == nil || result.replacedSession else { continue }

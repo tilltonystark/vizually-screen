@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Open a compact history from the comment bubble. See each saved comment, its current status, and any question from the agent. Use New comment or C to select a target.
 - Give the comment field a light border and put the labeled send arrow inside it. Return still sends and Shift+Return still adds a line.
 
 ## 0.7.0 — 2026-11-04

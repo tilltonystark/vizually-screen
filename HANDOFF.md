@@ -187,3 +187,5 @@ Release build and media checks pass, including preset pixel dimensions, anchor g
 ## Feedback composer polish (November 11)
 
 The requested composer changes live in VizuallyFeedback: one light border around the text and send arrow, no inset AppKit border or focus shadow, and no visible keyboard hint. Return sends, Shift+Return inserts a newline, and the labeled send arrow stays disabled for blank comments. The independent native sample verified both submit paths and persisted the multiline text locally. The user clarified this pass was for the feedback modal; crop behavior did not change. Leave the annotation open for acceptance.
+
+The same bubble now opens a compact history with one status per submitted comment, newest first. New comment enters selection; C still toggles it directly. The log reads the existing archive and reconciles questions from Agentation thread replies without replacing the session. See docs/feedback/README.md for the waiting and resuming reply prefixes. Package checks and the signed local build pass. The Mac was locked at the user's request; live popover layout, dismissal and draft return still need a native check.

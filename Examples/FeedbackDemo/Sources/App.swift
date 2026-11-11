@@ -26,7 +26,7 @@ struct DemoView: View {
         .feedbackTarget("demo.name", "Name field")
       Button("Count: \(count)") { count += 1 }.feedbackTarget("demo.counter", "Counter button")
       Text(
-        "Click the comment button or press C outside a text field. Hover, click, write, then Enter. This sample saves locally; set an endpoint to connect an agent."
+        "Open the comment bubble for feedback history, or press C outside a text field to comment. This sample saves locally."
       ).foregroundStyle(.secondary)
       Spacer()
     }.padding(40)

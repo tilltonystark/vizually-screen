@@ -92,6 +92,7 @@ struct FeedbackOverlay: View {
   @State private var comment = ""
   @State private var pinnedContext: FeedbackContext?
   @State private var draftBounds = CGRect.zero
+  @State private var historyVisible = false
   private func target(at point: CGPoint) -> FeedbackTarget? {
     targets.filter { geometry[$0.anchor].contains(point) }.min {
       let a = geometry[$0.anchor]
@@ -119,20 +120,20 @@ struct FeedbackOverlay: View {
   }
   private var status: (String, Color) {
     guard let latest = store.items.first else {
-      return ("Comment on this app (C)", appearance.secondaryText)
+      return ("No feedback yet", appearance.secondaryText)
     }
-    if latest.resolved { return ("Latest feedback completed", .green) }
-    if latest.agentStatus == "acknowledged" { return ("Agent working on latest feedback", .blue) }
-    if !store.connectionEnabled { return ("Feedback saved locally", appearance.secondaryText) }
-    return (
-      latest.agentID == nil ? "Waiting to connect · saved locally" : "Latest feedback queued",
-      .orange
-    )
+    let state = FeedbackStatus(latest, connectionEnabled: store.connectionEnabled)
+    switch state {
+    case .resolved: return (state.rawValue, .green)
+    case .inProgress: return (state.rawValue, .blue)
+    case .queued, .unsent, .waitingForInput: return (state.rawValue, .orange)
+    case .saved, .dismissed: return (state.rawValue, appearance.secondaryText)
+    }
   }
   var body: some View {
     ZStack(alignment: .bottomTrailing) {
       FeedbackEvents(
-        selecting: store.enabled, exclusions: exclusions, onMove: { pointer = $0 },
+        selecting: store.enabled && !historyVisible, exclusions: exclusions, onMove: { pointer = $0 },
         onClick: { point in
           if selected != nil {
             clearSelection()
@@ -165,7 +166,7 @@ struct FeedbackOverlay: View {
             ).allowsHitTesting(false)
         }
       }
-      Button(action: toggle) {
+      Button(action: showHistory) {
         Image(systemName: store.enabled ? "bubble.left.fill" : "bubble.left").font(
           .system(size: 19, weight: .medium)
         ).foregroundStyle(store.enabled ? Color.white : appearance.text).frame(
@@ -179,9 +180,18 @@ struct FeedbackOverlay: View {
           ).accessibilityHidden(true)
         }
       }.buttonStyle(.plain).shadow(color: .black.opacity(0.12), radius: 10, y: 4).help(
-        "\(status.0) · C toggles comment mode"
-      ).accessibilityLabel(store.enabled ? "Exit comment mode" : "Comment on this app")
-        .accessibilityValue(status.0).padding(.trailing, 20).padding(.bottom, 32)
+        "Feedback history · C to comment"
+      ).accessibilityLabel("Feedback history").accessibilityValue(status.0)
+        .popover(isPresented: $historyVisible, arrowEdge: .bottom) {
+          FeedbackHistory(store: store, appearance: appearance,
+            maxListHeight: min(344, max(128, geometry.size.height - 144)), hasDraft: selected != nil
+          ) {
+            historyVisible = false
+            if selected == nil { store.enabled = true }
+          }
+          .onExitCommand { historyVisible = false }
+        }
+        .padding(.trailing, 20).padding(.bottom, 32)
       if let target = selected {
         VStack(alignment: .leading, spacing: 12) {
           HStack {
@@ -242,11 +252,15 @@ struct FeedbackOverlay: View {
         if enabled { onActivate() } else { clearSelection() }
       }
       .onExitCommand {
-        clearSelection()
-        store.enabled = false
+        if historyVisible { historyVisible = false }
+        else {
+          clearSelection()
+          store.enabled = false
+        }
       }
       .onChange(of: store.requestedTargetID) { _, id in
         if let id, let target = targets.first(where: { $0.id == id }) {
+          historyVisible = false
           let rect = geometry[target.anchor]
           selected = target
           pin = CGPoint(x: rect.midX, y: rect.midY)
@@ -255,10 +269,14 @@ struct FeedbackOverlay: View {
           store.consumeTargetRequest()
         }
       }
-      .onChange(of: context.route) { _, _ in clearSelection() }
+      .onChange(of: context.route) { _, _ in
+        historyVisible = false
+        clearSelection()
+      }
       .onReceive(
         NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)
       ) { _ in
+        historyVisible = false
         clearSelection()
         store.enabled = false
       }
@@ -277,8 +295,16 @@ struct FeedbackOverlay: View {
     draftBounds = .zero
   }
   private func toggle() {
+    historyVisible = false
     store.enabled.toggle()
     clearSelection()
+  }
+  private func showHistory() {
+    if selected == nil {
+      store.enabled = false
+      clearSelection()
+    }
+    historyVisible.toggle()
   }
   private func submit(_ target: FeedbackTarget) {
     guard !comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
