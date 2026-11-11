@@ -9,6 +9,7 @@ final class Editor: ObservableObject {
     @Published var project: Project?
     @Published var recordingTitle:String?
     @Published var showsHome=true
+    @Published var cropping=false
     var onLibraryChange:((URL,URL?)->Void)?
     private var activeProjectURL:URL?
     private var hasChanges=false

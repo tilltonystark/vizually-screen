@@ -11,7 +11,7 @@ struct VizuallyScreenApp: App {
     @State private var showRecording = false
     @Environment(\.openWindow) private var openWindow
     init() { Geist.register() }
-    private var locked: Bool { editor.busy || capture.recording || capture.busy }
+    private var locked: Bool { editor.busy || editor.cropping || capture.recording || capture.busy }
     var body: some Scene {
         Window("Vizually Screen", id: "workspace") {
             WorkspaceView(editor: editor, capture: capture, showRecording: $showRecording)

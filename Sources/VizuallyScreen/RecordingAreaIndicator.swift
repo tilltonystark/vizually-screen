@@ -36,7 +36,7 @@ final class RecordingAreaIndicator:NSObject {
                 panel.hasShadow=false;panel.ignoresMouseEvents=true;panel.hidesOnDeactivate=false
                 panel.worksWhenModal=true;panel.isMovable=false;panel.isMovableByWindowBackground=false
                 panel.level = .statusBar
-                panel.collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary,.ignoresCycle]
+                panel.collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary,.canJoinAllApplications,.ignoresCycle]
                 panels.append(panel)
             }
         }

@@ -2,17 +2,18 @@ import AppKit
 import VizuallyScreenCore
 
 @MainActor
-final class AreaSelector {
+final class AreaSelector: NSObject {
     private var panels:[AreaPanel]=[]
     func present(on screens:[NSScreen], completion:@escaping ((NSScreen,CGRect)?)->Void) {
         cancel()
+        guard !screens.isEmpty else { completion(nil);return }
         for screen in screens {
-            let panel=AreaPanel(contentRect:screen.frame,styleMask:.borderless,backing:.buffered,defer:false)
+            let panel=AreaPanel(contentRect:screen.frame,styleMask:[.borderless,.nonactivatingPanel],backing:.buffered,defer:false)
             panel.isReleasedWhenClosed=false;panel.isOpaque=false;panel.backgroundColor = .clear
             panel.level = .statusBar;panel.hasShadow=false;panel.hidesOnDeactivate=false
             panel.worksWhenModal=true;panel.becomesKeyOnlyIfNeeded=false
             panel.isMovable=false;panel.isMovableByWindowBackground=false
-            panel.collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary]
+            panel.collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary,.canJoinAllApplications,.ignoresCycle]
             let view=AreaSelectionView(frame:CGRect(origin:.zero,size:screen.frame.size))
             view.wantsLayer=true
             view.setAccessibilityElement(true)
@@ -28,22 +29,46 @@ final class AreaSelector {
             view.needsDisplay=true
             panel.displayIfNeeded()
         }
-        NSApp.activate(ignoringOtherApps:true)
+        let center=NSWorkspace.shared.notificationCenter
+        center.addObserver(self,selector:#selector(raisePanels),name:NSWorkspace.didActivateApplicationNotification,object:nil)
+        center.addObserver(self,selector:#selector(raisePanels),name:NSWorkspace.activeSpaceDidChangeNotification,object:nil)
         let active=panels.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? panels.first
         active?.makeKeyAndOrderFront(nil)
         if let active { active.makeFirstResponder(active.contentView) }
     }
+    @objc private func raisePanels() {
+        for panel in panels { panel.orderFrontRegardless() }
+    }
     func cancel() {
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
         let previous=panels;panels=[]
         for panel in previous { panel.orderOut(nil);panel.close() }
     }
 }
-private final class AreaPanel:NSPanel { override var canBecomeKey:Bool { true } }
+private final class AreaPanel:NSPanel {
+    override var canBecomeKey:Bool { true }
+    override var canBecomeMain:Bool { false }
+}
 private final class AreaSelectionView:NSView {
     var pixelScale=1.0
     var finish:((CGRect?)->Void)?
     private var start:CGPoint?
     private var selection:CGRect?
+    private lazy var cancelButton=NSButton(title:"Cancel",target:self,action:#selector(cancelSelection))
+    private var badge:CGRect {
+        let width=max(1,min(bounds.width-24,454))
+        return CGRect(x:(bounds.width-width)/2,y:24,width:width,height:40)
+    }
+    override init(frame:NSRect) {
+        super.init(frame:frame)
+        addSubview(cancelButton)
+    }
+    required init?(coder:NSCoder) { nil }
+    override func layout() {
+        super.layout()
+        cancelButton.frame=CGRect(x:badge.maxX-84,y:badge.minY,width:72,height:40)
+    }
+    @objc private func cancelSelection() { finish?(nil) }
     override var isFlipped:Bool { true }
     override var acceptsFirstResponder:Bool { true }
     override func acceptsFirstMouse(for event:NSEvent?) -> Bool { true }
@@ -69,12 +94,11 @@ private final class AreaSelectionView:NSView {
             NSColor.white.setStroke();let border=NSBezierPath(rect:selection);border.lineWidth=2;border.stroke()
         }
         let text:String
-        if let selection { text="\(Int((selection.width*pixelScale).rounded())) × \(Int((selection.height*pixelScale).rounded())) px   ·   Release to select   ·   Esc to cancel" }
-        else { text="Drag to select an area   ·   Esc to cancel" }
+        if let selection { text="\(Int((selection.width*pixelScale).rounded())) × \(Int((selection.height*pixelScale).rounded())) px   ·   Release to select" }
+        else { text="Switch apps with ⌘Tab, then drag to select" }
         let font=NSFont(name:"Geist-Medium",size:13) ?? .systemFont(ofSize:13,weight:.medium)
-        let attributes:[NSAttributedString.Key:Any]=[.font:font,.foregroundColor:NSColor.labelColor]
+        let attributes:[NSAttributedString.Key:Any]=[.font:font,.foregroundColor:NSColor.black]
         let size=(text as NSString).size(withAttributes:attributes)
-        let badge=CGRect(x:max(12,(bounds.width-size.width-28)/2),y:24,width:size.width+28,height:40)
         NSColor.white.setFill();NSBezierPath(roundedRect:badge,xRadius:10,yRadius:10).fill()
         (text as NSString).draw(at:CGPoint(x:badge.minX+14,y:badge.minY+(badge.height-size.height)/2),withAttributes:attributes)
     }

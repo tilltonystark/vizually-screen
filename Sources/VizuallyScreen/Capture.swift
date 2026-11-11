@@ -52,7 +52,7 @@ final class Capture: NSObject,ObservableObject,SCStreamDelegate,SCContentSharing
     func chooseArea() {
         guard supportsArea,!recording,!busy,!picking else { return }
         areaIndicator.hide()
-        error=nil;picking=true;selectionStatus="Drag to select an area. Esc cancels."
+        error=nil;picking=true;selectionStatus="Switch apps with ⌘Tab, then drag to select."
         areaSelector.present(on:NSScreen.screens) { [weak self] choice in
             guard let self else { return }
             guard let (screen,rect)=choice,

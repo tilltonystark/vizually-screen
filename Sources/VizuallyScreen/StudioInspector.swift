@@ -2,25 +2,40 @@ import VizuallyFeedback
 import SwiftUI
 import VizuallyScreenCore
 
-struct StudioInspector: View {
+struct StudioInspector<CropPanel: View>: View {
     @ObservedObject var editor: Editor
     @Binding var tab: String
+    let startCrop: () -> Void
+    let cropping: Bool
+    @ViewBuilder let cropPanel: () -> CropPanel
     @EnvironmentObject var theme: StudioTheme
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 4) {
-                tabButton("Canvas", icon: "rectangle.on.rectangle")
-                tabButton("Zoom", icon: "plus.magnifyingglass")
-            }.padding(10)
-            Rule()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    if tab == "Canvas" { canvasControls } else { zoomControls }
-                }.padding(.horizontal,16).padding(.vertical,20)
-            }
-            if editor.project != nil {
+            if cropping {
+                ScrollView { cropPanel().padding(16) }
+            } else {
+                HStack(spacing: 4) {
+                    tabButton("Canvas", icon: "rectangle.on.rectangle")
+                    tabButton("Zoom", icon: "plus.magnifyingglass")
+                }.padding(10)
+                if editor.project != nil {
+                    Button(action:startCrop) {
+                        Label("Crop video",systemImage:"crop")
+                            .frame(maxWidth:.infinity,alignment:.leading)
+                    }.buttonStyle(StudioButtonStyle()).padding(.horizontal,16).padding(.bottom,12)
+                        .feedbackTarget("editor.crop","Crop video")
+                }
                 Rule()
-                Button(action: editor.saveProject) { Label("Save project", systemImage: "square.and.arrow.down") }.buttonStyle(StudioButtonStyle(quiet: true)).padding(8)
+                ScrollView {
+                    VStack(alignment:.leading,spacing:24) {
+                        if tab == "Canvas" { canvasControls } else { zoomControls }
+                    }.padding(.horizontal,16).padding(.vertical,20)
+                }
+                if editor.project != nil {
+                    Rule()
+                    Button(action:editor.saveProject) { Label("Save project",systemImage:"square.and.arrow.down") }
+                        .buttonStyle(StudioButtonStyle(quiet:true)).padding(8)
+                }
             }
         }.background(.white)
     }

@@ -9,11 +9,11 @@ bash scripts/build-app.sh
 open 'dist/Vizually Screen.app'
 ```
 
-Record a screen or a single app window using the macOS source picker. An already-authorized sole display is selected automatically. Source dimensions come from the actual captured content; new recordings default to no additional background. Originals and pointer sidecars are stored in `~/Movies/Vizually Screen`.
+Record a screen or a single app window using the macOS source picker. An already-authorized sole display is selected automatically. For part of a display, choose **Select area…**, use **⌘Tab** to bring the target app forward, then drag the area to keep. Source dimensions come from the actual captured content; new recordings default to no additional background. Originals and pointer sidecars are stored in `~/Movies/Vizually Screen`.
 
 The old `.framecraft.json` project format remains readable. New projects use `.vizually.json`; originals are never overwritten by export.
 
-Drag either handle on the video track to trim its start or end. For a spatial crop, use **Crop** below the preview, drag over what you want to keep, then choose **Apply crop**. **Reset** restores the full frame when applied. Both edits are saved in the project and applied on export; the original recording stays intact.
+Drag either handle on the video track to trim its start or end. For a spatial crop, choose **Crop video** at the top of the right pane. Draw a selection or resize its corners directly on the canvas, then choose **Apply crop**. **Reset** restores the full frame when applied. Both edits are saved in the project and applied on export; the original recording stays intact.
 
 ## Reusable feedback package
 

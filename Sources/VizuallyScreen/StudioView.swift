@@ -11,24 +11,32 @@ struct StudioView: View {
     @Environment(\.openWindow) private var openWindow
     @Binding var showRecording:Bool
     @State private var showExport = false
-    @State private var showCrop = false
+    private var cropping: Bool { editor.cropping }
+    @State private var cropSelection = CropControls.full
+    @State private var cropImage: CGImage?
+    @State private var cropFrameFailed = false
     @State private var inspectorTab = "Canvas"
     @State private var dropTargeted = false
     private var locked: Bool { editor.busy || capture.recording || capture.busy }
     private var title: String { editor.recordingTitle ?? editor.project.map { URL(fileURLWithPath: $0.sourcePath).deletingPathExtension().lastPathComponent } ?? "Untitled project" }
     var body: some View {
         VStack(spacing: 0) {
-            toolbar.feedbackTarget("editor.header","Editor header")
+            toolbar.disabled(cropping).feedbackTarget("editor.header","Editor header")
             Rule()
             HStack(spacing: 0) {
                 VStack(spacing: 0) {
                     preview.feedbackTarget("editor.preview","Video preview")
                     transport.feedbackTarget("editor.playback","Playback controls")
                     Rule()
-                    StudioTimeline(editor: editor).disabled(locked).feedbackTarget("editor.timeline","Timeline")
+                    StudioTimeline(editor: editor).disabled(locked || cropping).feedbackTarget("editor.timeline","Timeline")
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 Rule(vertical: true)
-                StudioInspector(editor: editor, tab: $inspectorTab).feedbackTarget("editor.inspector","Inspector").frame(width: 282).disabled(locked)
+                StudioInspector(editor:editor,tab:$inspectorTab,startCrop:beginCrop,cropping:cropping) {
+                    CropControls(selection:$cropSelection,ready:cropImage != nil,cancel:endCrop) {
+                        editor.applyCrop(cropSelection == CropControls.full ? nil:VideoCrop(cropSelection))
+                        endCrop()
+                    }
+                }.feedbackTarget("editor.inspector","Inspector").frame(width:282).disabled(locked)
             }
             Rule()
             statusBar
@@ -37,7 +45,18 @@ struct StudioView: View {
         .background(WindowChrome())
         .tint(theme.accent)
         .sheet(isPresented: $showExport) { ExportSheet(editor:editor).feedbackSurface(store:feedback,editor:editor,route:"export").environmentObject(theme).font(Geist.font()).preferredColorScheme(.light) }
-        .sheet(isPresented:$showCrop) { CropSheet(editor:editor).environmentObject(theme) }
+        .task(id:cropping) {
+            guard cropping else { return }
+            do {
+                let image=try await editor.cropFrame()
+                if !Task.isCancelled && cropping { cropImage=image }
+            } catch {
+                if !Task.isCancelled && cropping { cropFrameFailed=true }
+            }
+        }
+        .onChange(of:locked) { _, value in if value { endCrop() } }
+        .onChange(of:showRecording) { _, value in if value { endCrop() } }
+        .onDisappear { endCrop() }
         .onChange(of: editor.selectedZoomID) { _, value in if value != nil { inspectorTab = "Zoom" } }
     }
     private var toolbar: some View {
@@ -72,14 +91,25 @@ struct StudioView: View {
             if editor.project != nil {
                 GeometryReader { geometry in
                     let available = CGSize(width: max(1, geometry.size.width - theme.settings.spacing * 3), height: max(1, geometry.size.height - theme.settings.spacing * 3))
-                    let aspect = editor.videoSize.width / max(1, editor.videoSize.height)
-                    let width = min(available.width, available.height * aspect)
-                    NativePlayer(player: editor.player)
-                        .frame(width: width, height: width / max(0.001, aspect))
-                        .clipShape(RoundedRectangle(cornerRadius: 7))
-                        .overlay { RoundedRectangle(cornerRadius: 7).strokeBorder(Color.black.opacity(0.1), lineWidth: 1) }
-                        .shadow(color: .black.opacity(0.10), radius: 22, y: 10)
-                        .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+                    let source = cropImage.map { CGSize(width:$0.width,height:$0.height) } ?? editor.videoSize
+                    let aspect = max(0.001,source.width/max(1,source.height))
+                    let width = min(available.width,available.height*aspect)
+                    let size = CGSize(width:width,height:width/aspect)
+                    Group {
+                        if cropping {
+                            if let cropImage {
+                                CropCanvas(image:cropImage,size:size,selection:$cropSelection)
+                            } else if cropFrameFailed {
+                                Text("Could not load the original frame.").font(Geist.font(13)).foregroundStyle(Ink.secondary)
+                            } else { ProgressView("Loading original frame…") }
+                        } else {
+                            NativePlayer(player:editor.player)
+                                .frame(width:size.width,height:size.height)
+                                .clipShape(RoundedRectangle(cornerRadius:7))
+                                .overlay { RoundedRectangle(cornerRadius:7).strokeBorder(.black.opacity(0.1),lineWidth:1) }
+                                .shadow(color:.black.opacity(0.10),radius:22,y:10)
+                        }
+                    }.position(x:geometry.size.width/2,y:geometry.size.height/2)
                 }
             } else { emptyState }
             if editor.busy {
@@ -89,7 +119,7 @@ struct StudioView: View {
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay { if dropTargeted { RoundedRectangle(cornerRadius: 14).stroke(theme.accent, style: StrokeStyle(lineWidth: 2, dash: [6])).padding(12).allowsHitTesting(false) } }
         .dropDestination(for: URL.self) { urls, _ in
-            guard !locked, let url = urls.first, url.isFileURL else { return false }
+            guard !locked,!cropping, let url = urls.first, url.isFileURL else { return false }
             Task { await editor.load(url) }; return true
         } isTargeted: { dropTargeted = $0 }
     }
@@ -124,12 +154,19 @@ struct StudioView: View {
             Text(clockText(editor.playhead)).font(Geist.font(12, .medium)).monospacedDigit().frame(width: 70)
             Text("/  \(clockText(editor.duration))").font(Geist.font(12)).monospacedDigit().foregroundStyle(Ink.secondary)
             Spacer()
-            Button {
-                editor.player.pause();showCrop=true
-            } label: { Label("Crop",systemImage:"crop") }
-                .buttonStyle(StudioButtonStyle(quiet:true))
-                .help("Crop video").feedbackTarget("editor.crop","Crop video")
-        }.padding(.horizontal, 24).frame(height: 56).background(Color.white).disabled(editor.project == nil || locked)
+            Text(cropping ? "Original frame" : "Fit").font(Geist.font(11))
+                .foregroundStyle(Ink.secondary).frame(width:120,alignment:.trailing)
+        }.padding(.horizontal,24).frame(height:56).background(Color.white).disabled(editor.project == nil || locked || cropping)
+    }
+    private func beginCrop() {
+        guard !locked,let project=editor.project else { return }
+        editor.player.pause()
+        cropSelection=project.crop?.rect ?? CropControls.full
+        editor.cropping=true
+    }
+    private func endCrop() {
+        if cropping { editor.cropping=false }
+        cropImage=nil;cropFrameFailed=false
     }
     private var statusBar: some View {
         HStack(spacing: 7) {
